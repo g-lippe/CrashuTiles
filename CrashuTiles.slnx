@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CrashuTiles.App/CrashuTiles.App.csproj" />
+    <Project Path="src/CrashuTiles.Device/CrashuTiles.Device.csproj" />
+  </Folder>
+</Solution>
