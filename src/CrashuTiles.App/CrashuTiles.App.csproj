@@ -8,11 +8,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>CrashuTiles</AssemblyName>
     <RootNamespace>CrashuTiles</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CrashuTiles.Device\CrashuTiles.Device.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
   </ItemGroup>
 
 </Project>

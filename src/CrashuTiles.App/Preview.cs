@@ -23,9 +23,17 @@ static class Preview
         page ??= cfg.StartPage;
         var keys = cfg.Pages[page];
 
-        // Give the graphs something to show.
-        using var stats = new SystemStats(autoSample: false);
-        for (int s = 0; s < 12; s++) { Thread.Sleep(250); stats.Sample(); }
+        // Tiles request their sensors on first draw, so draw once to register them,
+        // then sample for a few seconds so the graphs have something to show.
+        using var sensors = new SensorHub(autoSample: false);
+        sensors.Sample();
+        var tiles = new Dictionary<int, Tile>();
+        for (int i = 0; i <= KeyCount; i++)
+            if (keys.TryGetValue(i == SmallScreenIndex ? "small" : i.ToString(), out var kc) && !(i == SmallScreenIndex && kc.Native != null))
+                tiles[i] = Tile.Create(kc);
+        var warm = new TileContext(sensors, DateTime.Now, false);
+        foreach (var (i, t) in tiles) t.Render(i == SmallScreenIndex ? SmallWidth : KeySize, KeySize, warm);
+        for (int s = 0; s < 8; s++) { Thread.Sleep(500); sensors.Sample(); }
 
         int pad = 30;
         int w = pad * 2 + 5 * KeySize + 4 * Gap, h = pad * 2 + 3 * KeySize + 2 * Gap;
@@ -33,7 +41,7 @@ static class Preview
         using (g)
         {
             g.Clear(Color.FromArgb(40, 42, 48));
-            var ctx = new TileContext(stats, DateTime.Now, false);
+            var ctx = new TileContext(sensors, DateTime.Now, false);
             for (int i = 0; i <= KeyCount; i++)
             {
                 bool small = i == SmallScreenIndex;
@@ -41,7 +49,7 @@ static class Preview
                 int x = pad + col * (KeySize + Gap), y = pad + row * (KeySize + Gap);
                 keys.TryGetValue(small ? "small" : i.ToString(), out var kc);
                 byte[] png;
-                if (kc != null && !(small && kc.Native != null)) png = Tile.Create(kc).Render(small ? SmallWidth : KeySize, KeySize, ctx);
+                if (tiles.TryGetValue(i, out var tile)) png = tile.Render(small ? SmallWidth : KeySize, KeySize, ctx);
                 else if (small) png = NativePlaceholder(kc?.Native ?? "clock");
                 else png = Tile.Blank(KeySize, KeySize);
                 using var ms = new MemoryStream(png);

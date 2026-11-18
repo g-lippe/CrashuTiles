@@ -1,7 +1,7 @@
 # CrashuTiles: notes for working on this repo
 
 Custom Windows software for the Ulanzi D200 stream controller ("the dock"): live tiles and shortcuts.
-C# / .NET 10, WinForms tray app, no NuGet dependencies so far.
+C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonitorLib (0.9.6), used by the app for sensors.
 
 ## Layout
 
@@ -12,11 +12,22 @@ C# / .NET 10, WinForms tray app, no NuGet dependencies so far.
   - `D200Device`: connect/reconnect, desired-state model, update scheduler and keep-alive.
 - `src/CrashuTiles.App`: the tray app (assembly `CrashuTiles`).
   - `Deck/DeckController`: a single worker thread that owns pages, tiles and input.
-  - `Tiles/Tiles.cs`: every tile type.
-  - `Rendering/Painter`: fonts, text, icons, sparklines.
-  - `Actions/*`, `Config/*` (`DefaultConfig.cs` is the first-run config), `Data/SystemStats`.
+  - `Tiles/Tiles.cs`: every tile type, plus `SensorFormat` (titles, units, scale, warning colours).
+  - `Rendering/Painter`: fonts, text, icons, sparklines, gauges.
+  - `Data/SensorHub`: LibreHardwareMonitor sampled every 1 s on a timer thread.
+    - Tiles call `Get(key)`, which starts tracking that key, and read a snapshot with a 60-sample history.
+    - Keys are aliases (the table in `SensorHub`) or raw LHM identifiers starting with `/`.
+  - `Actions/*`, `Config/*` (`DefaultConfig.cs` is the first-run config).
   - `Preview.cs`: `--preview out.png [page] [--default]` renders a page to an image with no device.
 - `tools/probe`: the original PowerShell + C# 5 probe and benchmarks, loaded via Add-Type with no build step.
+- `tools/SensorProbe`: `dotnet run --project tools/SensorProbe` dumps every sensor LHM can see. Use it to find raw ids and check what new hardware exposes.
+
+## Sensor facts (Ryzen 7 5700X3D, RTX 4070, ASRock B450M, non-admin, LHM 0.9.6)
+
+- **Read fine:** NVIDIA via NVAPI (everything), CPU load, memory, and network throughput. A full update takes about 80 ms, and `Computer.Open` takes about 1.4 s.
+- **Need admin plus the PawnIO driver** (LHM swapped WinRing0 for PawnIO): CPU temperature, clocks and power, plus motherboard/Super I/O. Without them they read 0 and the CPU voltages are bogus. `SensorHub` turns those zeros into null, shown as "n/a".
+- **Need admin:** storage (SMART), which is disabled for now.
+- **Plan for CPU temperature:** an elevated helper started by a scheduled task, feeding the unelevated app over a named pipe. The user installs PawnIO themselves; anti-cheat concerns have been reported.
 
 ## Protocol facts (verified on the maintainer's unit, 2026-11-17)
 
@@ -49,7 +60,7 @@ C# / .NET 10, WinForms tray app, no NuGet dependencies so far.
 ## Roadmap
 
 1. ~~Device layer, tiles, CPU/RAM, tray app~~ (v0.1)
-2. Hardware sensors via LibreHardwareMonitor: temperatures, GPU, fans. Needs admin, so likely an elevated helper.
+2. ~~Sensor tiles via LibreHardwareMonitor, non-admin set~~ (v0.2). Still open: CPU temperature, board fans and disk temperatures through an elevated helper.
 3. Peripheral batteries: Logitech G502 LIGHTSPEED (HID++), Corsair HS80, and Bluetooth devices through Windows.
 4. Media now playing (GlobalSystemMediaTransportControls), audio device switching, toggles that show state.
 5. Settings web page served locally (plain HTML/JS), autostart with Windows.

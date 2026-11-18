@@ -1,16 +1,18 @@
 # CrashuTiles
 
 Custom software for the **Ulanzi D200** stream controller: live tiles on its LCD keys
-(CPU, RAM, clock, graphs) and shortcuts that go further than the stock app.
+(CPU, GPU, RAM, network, clock, graphs) and shortcuts that go further than the stock app.
 
-It replaces Ulanzi Studio and talks to the dock directly over USB. It needs no drivers
-and no extra libraries.
+It replaces Ulanzi Studio and talks to the dock directly over USB. It needs no special drivers
+for the dock. Hardware sensors come from [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor).
 
 > Not affiliated with or endorsed by Ulanzi.
 
-## What it does (v0.1)
+## What it does
 
-- **Live tiles:** CPU and RAM load with a one-minute sparkline, a clock, and a CPU/RAM graph on the small screen.
+- **Sensor tiles:** any sensor as a big number with a one-minute sparkline, or as a ring gauge. Optional warning colours turn the tile orange or red above a threshold.
+- **Sensors without admin rights:** CPU load (total and busiest core), RAM, network up/down, and the full GPU: load, temperatures, power, fans, clocks, VRAM.
+- **Graphs and a clock:** a graph of up to three sensors (on the small screen or a key) and a clock tile.
 - **Shortcuts:** launch apps (their own icon shows on the key), open URLs, send hotkeys and media keys, and switch pages.
 - **Tap or hold:** a key can do one thing on tap and another when held for half a second.
 - **Pages:** folders of keys with a back button.
@@ -62,13 +64,14 @@ row 2:  10  11  12  [ small ]
   "startPage": "main",
   "pages": {
     "main": {
-      "0":  { "tile": "cpu" },
+      "0":  { "tile": "sensor", "sensor": "cpu.load", "warn": 80, "crit": 95 },
+      "2":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85 },
       "3":  { "label": "Calculator", "icon": "glyph:E8EF", "action": { "type": "launch", "path": "calc.exe" } },
       "6":  { "label": "Play / Pause", "icon": "glyph:E768", "color": "#2D9C6F",
               "action": { "type": "hotkey", "keys": "playpause" },
               "hold":   { "type": "hotkey", "keys": "next" } },
       "12": { "label": "More", "icon": "glyph:E712", "action": { "type": "page", "page": "tools" } },
-      "small": { "tile": "graph" }
+      "small": { "tile": "graph", "sensors": ["cpu.load", "gpu.load", "ram.load"] }
     }
   }
 }
@@ -76,12 +79,30 @@ row 2:  10  11  12  [ small ]
 
 | Field | Values |
 |---|---|
-| `tile` | `label` (default), `cpu`, `ram`, `clock`, `graph` |
+| `tile` | `label` (default), `sensor`, `clock`, `graph`; `cpu`, `ram` and `gpu` are shortcuts for sensor tiles |
+| `sensor` | an alias from the list below, or a raw LibreHardwareMonitor id like `/gpu-nvidia/0/temperature/0` |
+| `style` | sensor tiles: `spark` (default) or `gauge` |
+| `max` | top of the scale. The default is 100 for % and °C, otherwise the recent peak |
+| `warn` / `crit` | the tile turns orange / red at or above this value |
+| `sensors` | graph tiles: up to three sensors (default `cpu.load` and `ram.load`) |
 | `label` | text under the icon, or alone when there's no icon |
 | `icon` | `glyph:XXXX` (a [Segoe Fluent Icons](https://learn.microsoft.com/windows/apps/design/style/segoe-fluent-icons-font) code), or a `.png` / `.jpg` / `.ico` / `.exe` path |
 | `color` | accent colour `#RRGGBB` |
 | `action` / `hold` | `launch` (`path`, `args`), `url` (`url`), `hotkey` (`keys`), `page` (`page`), `back`, `config` |
 | `native` | small screen only: `clock`, `clock-date`, `clock-weekday`, `clock-full`, `dial`, `stats` |
+
+**Sensor aliases**
+
+| Group | Aliases |
+|---|---|
+| CPU | `cpu.load`, `cpu.coremax`, `cpu.temp`\*, `cpu.power`\*, `cpu.clock`\* |
+| RAM | `ram.load`, `ram.used`, `ram.free` |
+| GPU (NVIDIA, AMD, Intel) | `gpu.load`, `gpu.temp`, `gpu.hotspot`, `gpu.memtemp`, `gpu.power`, `gpu.clock`, `gpu.fan`, `gpu.vram`, `gpu.vramused` |
+| Network | `net.down`, `net.up`: the busiest adapter. `net.down@Ethernet 2` picks a specific one |
+
+\* CPU temperature, clocks and power, plus motherboard sensors, need CrashuTiles running as admin
+**and** the [PawnIO](https://github.com/namazso/PawnIO.Setup) driver installed. Without them those tiles show "n/a".
+Before installing PawnIO, check your games: some anti-cheat systems are reported to object to it.
 
 Hotkeys are written like `ctrl+shift+esc` or `win+d`. Any [Keys](https://learn.microsoft.com/dotnet/api/system.windows.forms.keys) name works,
 plus the shortcuts `playpause`, `next`, `prev`, `stop`, `mute`, `volup` and `voldown`.

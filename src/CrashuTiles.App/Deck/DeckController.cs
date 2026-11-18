@@ -20,7 +20,7 @@ sealed class DeckController : IDisposable
     const int HoldMs = 500;
 
     readonly D200Device _device;
-    readonly SystemStats _stats;
+    readonly SensorHub _sensors;
     readonly BlockingCollection<Action> _queue = new();
     readonly Thread _thread;
     readonly System.Threading.Timer _tick;
@@ -38,10 +38,10 @@ sealed class DeckController : IDisposable
 
     public string CurrentPage => _page;
 
-    public DeckController(D200Device device, SystemStats stats)
+    public DeckController(D200Device device, SensorHub sensors)
     {
         _device = device;
-        _stats = stats;
+        _sensors = sensors;
         _device.Button += (i, down) => Post(() => OnButton(i, down));
         _thread = new Thread(Run) { IsBackground = true, Name = "Deck" };
         _thread.Start();
@@ -133,7 +133,8 @@ sealed class DeckController : IDisposable
 
     void Draw(bool force)
     {
-        _device.SetNativeStats(_stats.Cpu, _stats.Ram, 0);
+        var (cpu, mem, gpu) = _sensors.NativeStats();
+        _device.SetNativeStats(cpu, mem, gpu);
         long now = _clock.ElapsedMilliseconds;
         var ctxTime = DateTime.Now;
         for (int i = 0; i < Slots; i++)
@@ -154,7 +155,7 @@ sealed class DeckController : IDisposable
     {
         var tile = _tiles[i];
         if (tile == null) return;
-        var ctx = new TileContext(_stats, now, _pressed[i]);
+        var ctx = new TileContext(_sensors, now, _pressed[i]);
         if (i == SmallScreenIndex) _device.SetSmallImage(tile.Render(SmallWidth, SmallHeight, ctx));
         else _device.SetKey(i, tile.Render(KeySize, KeySize, ctx));
     }

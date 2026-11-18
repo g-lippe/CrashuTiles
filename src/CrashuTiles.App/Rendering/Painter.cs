@@ -85,16 +85,16 @@ static class Painter
         return g.MeasureString(text, font, (int)box.Width).Height <= box.Height;
     }
 
-    /// <summary>Line + filled area for values 0..100, newest at the right edge.</summary>
-    public static void Sparkline(Graphics g, RectangleF r, float[] values, Color color, int capacity, bool fill = true)
+    /// <summary>Line + filled area for values 0..max, newest at the right edge.</summary>
+    public static void Sparkline(Graphics g, RectangleF r, float[] values, Color color, int capacity, bool fill = true, float max = 100)
     {
-        if (values.Length < 2) return;
+        if (values.Length < 2 || max <= 0) return;
         float step = r.Width / (capacity - 1);
         var pts = new PointF[values.Length];
         for (int i = 0; i < values.Length; i++)
         {
             float x = r.Right - (values.Length - 1 - i) * step;
-            float y = r.Bottom - Math.Clamp(values[i], 0, 100) / 100f * r.Height;
+            float y = r.Bottom - Math.Clamp(values[i], 0, max) / max * r.Height;
             pts[i] = new PointF(x, y);
         }
         if (fill)
@@ -109,6 +109,18 @@ static class Painter
         }
         using var pen = new Pen(color, 3f) { LineJoin = LineJoin.Round };
         g.DrawLines(pen, pts);
+    }
+
+    /// <summary>A 270-degree ring gauge (gap at the bottom) filled to fraction 0..1.</summary>
+    public static void Gauge(Graphics g, RectangleF box, float fraction, Color color, float thickness)
+    {
+        var arc = RectangleF.Inflate(box, -thickness / 2, -thickness / 2);
+        using (var track = new Pen(Alpha(Color.White, 34), thickness) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            g.DrawArc(track, arc, 135, 270);
+        float sweep = 270 * Math.Clamp(fraction, 0, 1);
+        if (sweep < 1) return;
+        using var pen = new Pen(color, thickness) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        g.DrawArc(pen, arc, 135, sweep);
     }
 
     // ---------- icons ----------

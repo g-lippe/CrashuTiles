@@ -44,8 +44,19 @@ public sealed class AppConfig
 
 public sealed class KeyConfig
 {
-    /// <summary>label (default), cpu, ram, clock, graph.</summary>
+    /// <summary>label (default), sensor, clock, graph; cpu / ram / gpu are shortcuts for sensor tiles.</summary>
     public string? Tile { get; set; }
+    /// <summary>Sensor tiles: an alias like "gpu.temp" or a raw LibreHardwareMonitor id like "/gpu-nvidia/0/temperature/0".</summary>
+    public string? Sensor { get; set; }
+    /// <summary>Graph tiles: up to three sensors to plot (default cpu.load and ram.load).</summary>
+    public List<string>? Sensors { get; set; }
+    /// <summary>Sensor tiles: "spark" (number + sparkline, default) or "gauge" (ring).</summary>
+    public string? Style { get; set; }
+    /// <summary>Top of the scale for sparklines and gauges. Defaults to 100 for % and °C, else the recent peak.</summary>
+    public float? Max { get; set; }
+    /// <summary>The tile turns orange at or above Warn and red at or above Crit.</summary>
+    public float? Warn { get; set; }
+    public float? Crit { get; set; }
     public string? Label { get; set; }
     /// <summary>"glyph:E768" (Segoe Fluent Icons code), a .png/.jpg/.ico/.exe path, or omitted (launch keys use the app's icon).</summary>
     public string? Icon { get; set; }
