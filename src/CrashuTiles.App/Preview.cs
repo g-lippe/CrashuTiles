@@ -26,12 +26,14 @@ static class Preview
         // Tiles request their sensors on first draw, so draw once to register them,
         // then sample for a few seconds so the graphs have something to show.
         using var sensors = new SensorHub(autoSample: false);
+        using var batteries = new CrashuTiles.Data.Batteries.BatteryHub(autoPoll: false);
         sensors.Sample();
+        batteries.Poll();
         var tiles = new Dictionary<int, Tile>();
         for (int i = 0; i <= KeyCount; i++)
             if (keys.TryGetValue(i == SmallScreenIndex ? "small" : i.ToString(), out var kc) && !(i == SmallScreenIndex && kc.Native != null))
                 tiles[i] = Tile.Create(kc);
-        var warm = new TileContext(sensors, DateTime.Now, false);
+        var warm = new TileContext(sensors, batteries, DateTime.Now, false);
         foreach (var (i, t) in tiles) t.Render(i == SmallScreenIndex ? SmallWidth : KeySize, KeySize, warm);
         for (int s = 0; s < 8; s++) { Thread.Sleep(500); sensors.Sample(); }
 
@@ -41,7 +43,7 @@ static class Preview
         using (g)
         {
             g.Clear(Color.FromArgb(40, 42, 48));
-            var ctx = new TileContext(sensors, DateTime.Now, false);
+            var ctx = new TileContext(sensors, batteries, DateTime.Now, false);
             for (int i = 0; i <= KeyCount; i++)
             {
                 bool small = i == SmallScreenIndex;

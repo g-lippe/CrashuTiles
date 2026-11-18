@@ -17,10 +17,27 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
   - `Data/SensorHub`: LibreHardwareMonitor sampled every 1 s on a timer thread.
     - Tiles call `Get(key)`, which starts tracking that key, and read a snapshot with a 60-sample history.
     - Keys are aliases (the table in `SensorHub`) or raw LHM identifiers starting with `/`.
+  - `Data/Batteries/*`: `BatteryHub` plus one source per vendor (see Battery facts).
   - `Actions/*`, `Config/*` (`DefaultConfig.cs` is the first-run config).
   - `Preview.cs`: `--preview out.png [page] [--default]` renders a page to an image with no device.
 - `tools/probe`: the original PowerShell + C# 5 probe and benchmarks, loaded via Add-Type with no build step.
 - `tools/SensorProbe`: `dotnet run --project tools/SensorProbe` dumps every sensor LHM can see. Use it to find raw ids and check what new hardware exposes.
+
+## Battery facts (2026-11-18)
+
+- `Data/Batteries/BatteryHub` polls every source every 30 s on a timer thread. It caches the last level per device in `%APPDATA%\CrashuTiles\batteries.json`, so offline devices show their last level.
+- **Logitech G502 LIGHTSPEED** (receiver `046D:C539`, slot 1):
+  - It has only feature 0x1001 (voltage); 4056 mV is about 89% on the Li-ion curve.
+  - We use the long-report collection (page 0xFF00, usage 2, 20 bytes) with software id 0x0A, alongside G HUB.
+  - Receiver errors: 0x08 means an empty slot, **0x09 means the device is asleep or unreachable**. A sleeping mouse can't be discovered until it wakes.
+- **Corsair HS80:** reads through iCUE SDK v4 (`CorsairReadDeviceProperty`, `CDPI_BatteryLevel` = 9, an int at offset 8 of the 24-byte property struct). It's only listed while the headset is on. The DLL is not redistributable, so the user supplies it. Third-party control was already enabled in iCUE.
+- **Bluetooth:** read via CfgMgr32 on present BTHENUM/BTHLE nodes. Untested with a device that reports its battery. **AirPods have no battery property in Windows.**
+- **AirPods:** `AirPodsSource` uses the WinRT `BluetoothLEAdvertisementWatcher`, which is why the app's TFM is `net10.0-windows10.0.19041.0` and the exe now builds into that folder.
+  - It listens for Apple manufacturer data (0x004C) of type 0x07. Byte 6 holds the two bud nibbles, swapped when `(byte5 & 0x20) == 0`. Byte 7 holds the charging bits (high nibble) and the case level (low nibble). Levels are 0..10 ×10%; 15 means unknown.
+  - Bytes 3..4 are the Bluetooth PID, little-endian. Adverts are filtered to the PIDs of connected Apple devices, taken from `VID&0001004C_PID&xxxx` in BTHENUM ids. The maintainer's pair is PID 0x2027.
+  - Without the filter, other Apple devices nearby produced bogus readings.
+- **8BitDo** (`2DC8:3106` via dongle): XInput reports it as "wired", so there's no battery.
+- `tools/BatteryProbe`: `dotnet run --project tools/BatteryProbe` dumps HID++ devices and battery features. Add `icue <dll>` to list iCUE devices.
 
 ## Sensor facts (Ryzen 7 5700X3D, RTX 4070, ASRock B450M, non-admin, LHM 0.9.6)
 
@@ -61,6 +78,6 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 
 1. ~~Device layer, tiles, CPU/RAM, tray app~~ (v0.1)
 2. ~~Sensor tiles via LibreHardwareMonitor, non-admin set~~ (v0.2). Still open: CPU temperature, board fans and disk temperatures through an elevated helper.
-3. Peripheral batteries: Logitech G502 LIGHTSPEED (HID++), Corsair HS80, and Bluetooth devices through Windows.
+3. ~~Peripheral batteries: Logitech HID++, Corsair iCUE, Bluetooth, AirPods BLE, XInput~~ (v0.3)
 4. Media now playing (GlobalSystemMediaTransportControls), audio device switching, toggles that show state.
 5. Settings web page served locally (plain HTML/JS), autostart with Windows.

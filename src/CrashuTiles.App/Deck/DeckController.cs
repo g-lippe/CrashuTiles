@@ -3,6 +3,7 @@ using System.Diagnostics;
 using CrashuTiles.Actions;
 using CrashuTiles.Config;
 using CrashuTiles.Data;
+using CrashuTiles.Data.Batteries;
 using CrashuTiles.Device;
 using CrashuTiles.Tiles;
 using static CrashuTiles.Device.D200Protocol;
@@ -21,6 +22,7 @@ sealed class DeckController : IDisposable
 
     readonly D200Device _device;
     readonly SensorHub _sensors;
+    readonly BatteryHub _batteries;
     readonly BlockingCollection<Action> _queue = new();
     readonly Thread _thread;
     readonly System.Threading.Timer _tick;
@@ -38,10 +40,11 @@ sealed class DeckController : IDisposable
 
     public string CurrentPage => _page;
 
-    public DeckController(D200Device device, SensorHub sensors)
+    public DeckController(D200Device device, SensorHub sensors, BatteryHub batteries)
     {
         _device = device;
         _sensors = sensors;
+        _batteries = batteries;
         _device.Button += (i, down) => Post(() => OnButton(i, down));
         _thread = new Thread(Run) { IsBackground = true, Name = "Deck" };
         _thread.Start();
@@ -155,7 +158,7 @@ sealed class DeckController : IDisposable
     {
         var tile = _tiles[i];
         if (tile == null) return;
-        var ctx = new TileContext(_sensors, now, _pressed[i]);
+        var ctx = new TileContext(_sensors, _batteries, now, _pressed[i]);
         if (i == SmallScreenIndex) _device.SetSmallImage(tile.Render(SmallWidth, SmallHeight, ctx));
         else _device.SetKey(i, tile.Render(KeySize, KeySize, ctx));
     }

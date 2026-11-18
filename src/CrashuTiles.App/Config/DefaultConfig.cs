@@ -11,13 +11,16 @@ static class DefaultConfig
   //   row 1:   5   6   7   8   9
   //   row 2:  10  11  12  [ small ]
   //
-  // tile:    label (default) | sensor | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  // tile:    label (default) | sensor | battery | clock | graph   (cpu, ram, gpu = sensor shortcuts)
   // sensor:  cpu.load cpu.coremax cpu.temp* cpu.power* cpu.clock*  ram.load ram.used ram.free
   //          gpu.load gpu.temp gpu.hotspot gpu.memtemp gpu.power gpu.clock gpu.fan gpu.vram gpu.vramused
   //          net.down net.up (busiest adapter; "net.down@Ethernet 2" picks one)
   //          or a raw LibreHardwareMonitor id like "/gpu-nvidia/0/temperature/0"
   //          (* needs CrashuTiles running as admin plus the PawnIO driver)
   // style:   spark (default) | gauge      max: top of the scale      warn / crit: orange / red from this value
+  // battery: logitech (HID++, works with G HUB) | corsair (needs iCUE + iCUESDK.x64_2019.dll in the data folder)
+  //          | bluetooth (what Windows shows) | xinput (Xbox controllers) | any;  match: part of the device name
+  //          battery warn / crit default to 30 / 15 (orange / red at or below)
   // sensors: graph tiles, up to three, e.g. ["cpu.load", "gpu.load", "ram.load"]
   // icon:    "glyph:E768" (Segoe Fluent Icons code) or a .png/.jpg/.ico/.exe path.
   //          Launch keys without an icon show the app's own icon.
@@ -37,13 +40,11 @@ static class DefaultConfig
       "1":  { "tile": "sensor", "sensor": "gpu.load", "warn": 90 },
       "2":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85 },
       "3":  { "tile": "sensor", "sensor": "ram.load", "warn": 85 },
-      "4":  { "tile": "clock", "color": "#F5A623" },
+      "4":  { "tile": "battery", "battery": "logitech", "match": "G502", "label": "Mouse" },
 
-      "5":  { "label": "Previous", "icon": "glyph:E892", "color": "#2D9C6F", "action": { "type": "hotkey", "keys": "prev" } },
-      "6":  { "label": "Play / Pause", "icon": "glyph:E768", "color": "#2D9C6F", "action": { "type": "hotkey", "keys": "playpause" } },
-      "7":  { "label": "Next", "icon": "glyph:E893", "color": "#2D9C6F", "action": { "type": "hotkey", "keys": "next" } },
-      "8":  { "label": "Mute", "icon": "glyph:E74F", "color": "#C0504D", "action": { "type": "hotkey", "keys": "mute" } },
-      "9":  { "label": "Desktop", "icon": "glyph:E7F4", "action": { "type": "hotkey", "keys": "win+d" } },
+      "5":  { "tile": "battery", "battery": "corsair", "match": "HS80", "label": "Headset" },
+      "6":  { "tile": "battery", "battery": "bluetooth", "match": "AirPods", "label": "AirPods" },
+      "7":  { "tile": "battery", "battery": "xinput", "label": "Controller" },
 
       "10": { "label": "Explorer", "action": { "type": "launch", "path": "explorer.exe" } },
       "11": { "label": "Snip", "icon": "glyph:E722", "action": { "type": "hotkey", "keys": "win+shift+s" } },

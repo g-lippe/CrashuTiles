@@ -1,12 +1,13 @@
 using System.Globalization;
 using CrashuTiles.Config;
 using CrashuTiles.Data;
+using CrashuTiles.Data.Batteries;
 using CrashuTiles.Rendering;
 using LibreHardwareMonitor.Hardware;
 
 namespace CrashuTiles.Tiles;
 
-sealed record TileContext(SensorHub Sensors, DateTime Now, bool Pressed);
+sealed record TileContext(SensorHub Sensors, BatteryHub Batteries, DateTime Now, bool Pressed);
 
 /// <summary>A key's look. Draw fills the whole canvas: 196x196 for keys, 458x196 for the small screen.</summary>
 abstract class Tile
@@ -31,6 +32,7 @@ abstract class Tile
         "cpu" => new SensorTile(cfg, cfg.Sensor ?? "cpu.load"),
         "ram" => new SensorTile(cfg, cfg.Sensor ?? "ram.load"),
         "gpu" => new SensorTile(cfg, cfg.Sensor ?? "gpu.load"),
+        "battery" => new BatteryTile(cfg),
         "clock" => new ClockTile(cfg),
         "graph" => new GraphTile(cfg),
         _ => new LabelTile(cfg),
@@ -101,6 +103,21 @@ static class SensorFormat
         ["gpu.vramused"] = "VRAM used", ["net.down"] = "Download", ["net.up"] = "Upload",
     };
 
+    public static readonly Color CpuColor = Color.FromArgb(63, 169, 245);   // blue
+    public static readonly Color GpuColor = Color.FromArgb(118, 185, 0);    // green
+    public static readonly Color RamColor = Color.FromArgb(230, 180, 34);   // golden
+    public static readonly Color NetColor = Color.FromArgb(0, 190, 170);    // teal
+
+    /// <summary>Each sensor family has one colour: CPU blue, GPU green, RAM golden, network teal.</summary>
+    public static Color? GroupColor(string key) => key.Split('.')[0].ToLowerInvariant() switch
+    {
+        "cpu" => CpuColor,
+        "gpu" => GpuColor,
+        "ram" => RamColor,
+        "net" => NetColor,
+        _ => null,
+    };
+
     public static readonly Color Warn = Color.FromArgb(245, 166, 35);
     public static readonly Color Crit = Color.FromArgb(229, 72, 77);
 
@@ -152,16 +169,7 @@ sealed class SensorTile : Tile
 {
     readonly string _key;
 
-    public SensorTile(KeyConfig cfg, string key) : base(cfg, DefaultColor(key)) => _key = key;
-
-    static Color DefaultColor(string key) => key.Split('.')[0].ToLowerInvariant() switch
-    {
-        "cpu" => Color.FromArgb(63, 169, 245),
-        "ram" => Color.FromArgb(181, 124, 255),
-        "gpu" => Color.FromArgb(118, 185, 0),
-        "net" => Color.FromArgb(0, 190, 170),
-        _ => Painter.DefaultAccent,
-    };
+    public SensorTile(KeyConfig cfg, string key) : base(cfg, SensorFormat.GroupColor(key) ?? Painter.DefaultAccent) => _key = key;
 
     public override int RefreshMs => 1000;
 
@@ -169,13 +177,15 @@ sealed class SensorTile : Tile
     {
         var reading = ctx.Sensors.Get(_key);
         var color = SensorFormat.Accent(reading, Config, Accent);
-        Painter.Background(g, r, color);
+        bool gauge = string.Equals(Config.Style, "gauge", StringComparison.OrdinalIgnoreCase);
+        if (gauge) g.Clear(Color.Black); // gauges sit on plain black; the ring carries the colour
+        else Painter.Background(g, r, color);
         string title = Config.Label ?? SensorFormat.Title(_key, reading);
         string value = SensorFormat.Value(reading);
         float max = SensorFormat.Max(reading, Config.Max);
         var dim = Color.FromArgb(200, 255, 255, 255);
 
-        if (string.Equals(Config.Style, "gauge", StringComparison.OrdinalIgnoreCase))
+        if (gauge)
         {
             // Ring on top, label in and below the gap at the bottom.
             float size = r.Height - 44;
@@ -215,6 +225,49 @@ sealed class SensorTile : Tile
     }
 }
 
+/// <summary>A wireless device's battery: percentage, a battery bar, and a bolt while charging.</summary>
+sealed class BatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199, 89))
+{
+    public override int RefreshMs => 1000; // cheap: reads the hub's snapshot; unchanged images aren't resent
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var reading = ctx.Batteries.Find(Config.Battery ?? "any", Config.Match);
+        int? pct = reading?.Percent;
+        bool online = reading?.Online == true;
+
+        // Green, orange at 30% and below, red at 15% and below (warn/crit override these).
+        float warn = Config.Warn ?? 30, crit = Config.Crit ?? 15;
+        var level = pct is int p ? (p <= crit ? SensorFormat.Crit : p <= warn ? SensorFormat.Warn : Accent) : Painter.DefaultAccent;
+        var color = online ? level : Painter.Mix(level, Color.Black, 0.55f);
+        Painter.Background(g, r, color);
+
+        var dim = Color.FromArgb(online ? 200 : 120, 255, 255, 255);
+        string title = Config.Label ?? Config.Match ?? reading?.Name ?? "Battery";
+        Painter.Text(g, title, Painter.Ui, FontStyle.Regular, 24, new RectangleF(r.X + 14, r.Y + 10, r.Width - 28, 32), dim, StringAlignment.Near);
+
+        string value = pct is int v ? v + "%" : "–";
+        Painter.Text(g, value, Painter.Numbers, FontStyle.Bold, 64, new RectangleF(r.X + 6, r.Y + 38, r.Width - 12, 72),
+            online ? Color.White : Color.FromArgb(140, 255, 255, 255));
+
+        var bar = new RectangleF(r.X + 38, r.Y + 122, r.Width - 76, 44);
+        Painter.Battery(g, bar, (pct ?? 0) / 100f, color, reading?.Charging == true && online, dim);
+
+        string? note = reading == null ? "not found" : !online ? "last seen " + Ago(reading.LastSeen) : reading.Detail;
+        if (note != null)
+            Painter.Text(g, note, Painter.Ui, FontStyle.Regular, 18, new RectangleF(r.X, r.Bottom - 28, r.Width, 24), dim);
+    }
+
+    static string Ago(DateTime t)
+    {
+        var d = DateTime.Now - t;
+        if (d.TotalMinutes < 1) return "just now";
+        if (d.TotalHours < 1) return $"{(int)d.TotalMinutes} min ago";
+        if (d.TotalDays < 1) return $"{(int)d.TotalHours} h ago";
+        return $"{(int)d.TotalDays} d ago";
+    }
+}
+
 sealed class ClockTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(245, 166, 35))
 {
     public override int RefreshMs => 1000;
@@ -224,7 +277,7 @@ sealed class ClockTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(245, 166, 35))
         Painter.Background(g, r, Accent);
         var c = CultureInfo.CurrentCulture;
         Painter.Text(g, ctx.Now.ToString("HH:mm", c), Painter.Numbers, FontStyle.Bold, 66, new RectangleF(r.X, r.Y + r.Height * 0.16f, r.Width, r.Height * 0.44f), Color.White);
-        Painter.Text(g, ctx.Now.ToString("ddd d MMM", c), Painter.Ui, FontStyle.Regular, 24, new RectangleF(r.X + 6, r.Y + r.Height * 0.62f, r.Width - 12, r.Height * 0.22f), Color.FromArgb(210, 255, 255, 255));
+        Painter.Text(g, ctx.Now.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), Painter.Ui, FontStyle.Regular, 24, new RectangleF(r.X + 6, r.Y + r.Height * 0.62f, r.Width - 12, r.Height * 0.22f), Color.FromArgb(210, 255, 255, 255));
     }
 }
 
@@ -240,8 +293,9 @@ sealed class GraphTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(63, 169, 245))
         g.Clear(Painter.Base);
         var keys = (Config.Sensors is { Count: > 0 } s ? s : ["cpu.load", "ram.load"]).Take(3).ToList();
         var readings = keys.Select(k => ctx.Sensors.Get(k)).ToList();
+        var colors = SeriesColors(keys);
         bool wide = r.Width > r.Height * 1.5f;
-        float legendW = wide ? 150 : 0;
+        float legendW = wide ? (keys.Count > 2 ? 215 : 150) : 0;
 
         var chart = new RectangleF(r.X + legendW + 8, r.Y + 14, r.Width - legendW - 22, r.Height - 28);
         using (var grid = new Pen(Color.FromArgb(40, 255, 255, 255), 1))
@@ -253,14 +307,14 @@ sealed class GraphTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(63, 169, 245))
 
         // Draw back to front so the first sensor sits on top, with the only fill.
         for (int i = keys.Count - 1; i >= 0; i--)
-            Painter.Sparkline(g, chart, readings[i]?.History ?? [], Palette[i], SensorHub.HistoryLength,
+            Painter.Sparkline(g, chart, readings[i]?.History ?? [], colors[i], SensorHub.HistoryLength,
                 fill: i == 0, max: SensorFormat.Max(readings[i], Config.Max));
 
         if (wide)
         {
             float rowH = (r.Height - 24f) / keys.Count;
             for (int i = 0; i < keys.Count; i++)
-                Legend(g, SensorFormat.Title(keys[i], readings[i]), SensorFormat.Value(readings[i]), Palette[i],
+                Legend(g, SensorFormat.Title(keys[i], readings[i]), SensorFormat.Value(readings[i]), colors[i],
                     new RectangleF(r.X + 16, r.Y + 12 + i * rowH, legendW - 8, rowH), keys.Count);
         }
         else
@@ -269,10 +323,33 @@ sealed class GraphTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(63, 169, 245))
         }
     }
 
+    /// <summary>Series take their family colour (CPU blue, GPU green, RAM golden); repeats get lighter shades.</summary>
+    static Color[] SeriesColors(List<string> keys)
+    {
+        var result = new Color[keys.Count];
+        var seen = new Dictionary<Color, int>();
+        for (int i = 0; i < keys.Count; i++)
+        {
+            var baseColor = SensorFormat.GroupColor(keys[i]) ?? Palette[i];
+            int n = seen.TryGetValue(baseColor, out var c) ? c : 0;
+            seen[baseColor] = n + 1;
+            result[i] = n == 0 ? baseColor : Painter.Mix(baseColor, Color.White, 0.35f * n);
+        }
+        return result;
+    }
+
     static void Legend(Graphics g, string name, string value, Color color, RectangleF box, int rows)
     {
-        float nameH = rows > 2 ? 20 : 28;
-        Painter.Text(g, name, Painter.Ui, FontStyle.Regular, rows > 2 ? 18 : 22, new RectangleF(box.X, box.Y, box.Width, nameH), color, StringAlignment.Near);
-        Painter.Text(g, value, Painter.Numbers, FontStyle.Bold, rows > 2 ? 30 : 46, new RectangleF(box.X, box.Y + nameH - 4, box.Width, box.Height - nameH), Color.White, StringAlignment.Near, StringAlignment.Near);
+        if (rows > 2)
+        {
+            // Three rows are too short to stack: name on the left, value right-aligned on the same line.
+            using var vf = new Font(Painter.Numbers, 32, FontStyle.Bold, GraphicsUnit.Pixel);
+            float vw = g.MeasureString(value, vf).Width;
+            Painter.Text(g, value, Painter.Numbers, FontStyle.Bold, 32, box, Color.White, StringAlignment.Far);
+            Painter.Text(g, name, Painter.Ui, FontStyle.Regular, 26, new RectangleF(box.X, box.Y, box.Width - vw - 2, box.Height), color, StringAlignment.Near);
+            return;
+        }
+        Painter.Text(g, name, Painter.Ui, FontStyle.Regular, 28, new RectangleF(box.X, box.Y, box.Width, 38), color, StringAlignment.Near);
+        Painter.Text(g, value, Painter.Numbers, FontStyle.Bold, 46, new RectangleF(box.X, box.Y + 32, box.Width, box.Height - 32), Color.White, StringAlignment.Near, StringAlignment.Near);
     }
 }

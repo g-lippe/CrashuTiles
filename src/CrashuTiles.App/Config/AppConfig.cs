@@ -44,7 +44,7 @@ public sealed class AppConfig
 
 public sealed class KeyConfig
 {
-    /// <summary>label (default), sensor, clock, graph; cpu / ram / gpu are shortcuts for sensor tiles.</summary>
+    /// <summary>label (default), sensor, battery, clock, graph; cpu / ram / gpu are shortcuts for sensor tiles.</summary>
     public string? Tile { get; set; }
     /// <summary>Sensor tiles: an alias like "gpu.temp" or a raw LibreHardwareMonitor id like "/gpu-nvidia/0/temperature/0".</summary>
     public string? Sensor { get; set; }
@@ -54,6 +54,10 @@ public sealed class KeyConfig
     public string? Style { get; set; }
     /// <summary>Top of the scale for sparklines and gauges. Defaults to 100 for % and °C, else the recent peak.</summary>
     public float? Max { get; set; }
+    /// <summary>Battery tiles: logitech, corsair, bluetooth, xinput or any.</summary>
+    public string? Battery { get; set; }
+    /// <summary>Battery tiles: part of the device name to pick (e.g. "G502", "AirPods"); default the first device.</summary>
+    public string? Match { get; set; }
     /// <summary>The tile turns orange at or above Warn and red at or above Crit.</summary>
     public float? Warn { get; set; }
     public float? Crit { get; set; }

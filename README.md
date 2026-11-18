@@ -12,6 +12,14 @@ for the dock. Hardware sensors come from [LibreHardwareMonitor](https://github.c
 
 - **Sensor tiles:** any sensor as a big number with a one-minute sparkline, or as a ring gauge. Optional warning colours turn the tile orange or red above a threshold.
 - **Sensors without admin rights:** CPU load (total and busiest core), RAM, network up/down, and the full GPU: load, temperatures, power, fans, clocks, VRAM.
+- **Battery tiles:** wireless devices with a percentage, battery bar, charging bolt and low-battery colours:
+  - **Logitech** mice and keyboards through HID++. This works alongside G HUB.
+  - **Corsair** devices through iCUE.
+  - **Bluetooth** devices: the same level the Windows Settings app shows.
+  - **AirPods:** left, right and case, read from Apple's broadcasts.
+  - **Xbox controllers.**
+
+  A device that's asleep or off keeps showing its last level with "last seen …", even after a restart.
 - **Graphs and a clock:** a graph of up to three sensors (on the small screen or a key) and a clock tile.
 - **Shortcuts:** launch apps (their own icon shows on the key), open URLs, send hotkeys and media keys, and switch pages.
 - **Tap or hold:** a key can do one thing on tap and another when held for half a second.
@@ -33,7 +41,7 @@ dotnet build
 ```
 
 ```bash
-src/CrashuTiles.App/bin/Debug/net10.0-windows/CrashuTiles.exe
+src/CrashuTiles.App/bin/Debug/net10.0-windows10.0.19041.0/CrashuTiles.exe
 ```
 
 It runs in the tray. Right-click the icon for brightness, editing the config, reloading and exit.
@@ -85,6 +93,8 @@ row 2:  10  11  12  [ small ]
 | `max` | top of the scale. The default is 100 for % and °C, otherwise the recent peak |
 | `warn` / `crit` | the tile turns orange / red at or above this value |
 | `sensors` | graph tiles: up to three sensors (default `cpu.load` and `ram.load`) |
+| `battery` | battery tiles: `logitech`, `corsair`, `bluetooth`, `xinput` or `any` |
+| `match` | battery tiles: part of the device name, e.g. `G502` or `AirPods`. Without it, the first device from that source is used |
 | `label` | text under the icon, or alone when there's no icon |
 | `icon` | `glyph:XXXX` (a [Segoe Fluent Icons](https://learn.microsoft.com/windows/apps/design/style/segoe-fluent-icons-font) code), or a `.png` / `.jpg` / `.ico` / `.exe` path |
 | `color` | accent colour `#RRGGBB` |
@@ -103,6 +113,15 @@ row 2:  10  11  12  [ small ]
 \* CPU temperature, clocks and power, plus motherboard sensors, need CrashuTiles running as admin
 **and** the [PawnIO](https://github.com/namazso/PawnIO.Setup) driver installed. Without them those tiles show "n/a".
 Before installing PawnIO, check your games: some anti-cheat systems are reported to object to it.
+
+**Battery sources**
+
+| Source | Notes |
+|---|---|
+| `logitech` | HID++ 2.0 through a LIGHTSPEED/Unifying receiver or a direct connection. It reads features 0x1004, 0x1000 or 0x1001; voltage readings are converted to a percentage. Asleep devices are retried every 30 s |
+| `corsair` | Needs iCUE running **and** Corsair's SDK DLL, which CrashuTiles doesn't ship because of Corsair's licence. Download the [iCUE SDK](https://github.com/CorsairOfficial/cue-sdk/releases) and copy `redist/x64/iCUESDK.x64_2019.dll` into `%APPDATA%\CrashuTiles`. iCUE reports no charging state |
+| `bluetooth` | Connected devices whose battery Windows knows (`DEVPKEY_Bluetooth_Battery`), **plus AirPods/Beats**, read from Apple's Bluetooth LE broadcasts. Windows has no value for those. AirPods give left / right / case in 10% steps (shown on the tile, `+` = charging). They're sent only while the buds are out or the case is open, and only broadcasts matching the model of AirPods connected to this PC are used |
+| `xinput` | Xbox controllers. XInput only has four steps, shown as 5 / 30 / 65 / 100 %. Controllers that report "wired", such as 8BitDo dongles, have no readable battery |
 
 Hotkeys are written like `ctrl+shift+esc` or `win+d`. Any [Keys](https://learn.microsoft.com/dotnet/api/system.windows.forms.keys) name works,
 plus the shortcuts `playpause`, `next`, `prev`, `stop`, `mute`, `volup` and `voldown`.

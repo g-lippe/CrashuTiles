@@ -2,6 +2,7 @@ using System.Diagnostics;
 using CrashuTiles.Actions;
 using CrashuTiles.Config;
 using CrashuTiles.Data;
+using CrashuTiles.Data.Batteries;
 using CrashuTiles.Deck;
 using CrashuTiles.Device;
 
@@ -14,6 +15,7 @@ sealed class TrayApp : ApplicationContext
     readonly ToolStripMenuItem _status, _closeStudio;
     readonly D200Device _device = new();
     readonly SensorHub _sensors = new();
+    readonly BatteryHub _batteries = new();
     readonly DeckController _deck;
     readonly FileSystemWatcher _watcher;
     readonly System.Windows.Forms.Timer _reloadDebounce = new() { Interval = 400 };
@@ -47,7 +49,7 @@ sealed class TrayApp : ApplicationContext
 
         _device.Log += Log.Info;
         _device.ConnectionChanged += connected => _ui.Post(_ => SetStatus(connected), null);
-        _deck = new DeckController(_device, _sensors);
+        _deck = new DeckController(_device, _sensors, _batteries);
 
         LoadConfig();
         _device.Start();
@@ -117,6 +119,7 @@ sealed class TrayApp : ApplicationContext
         _deck.Dispose();
         _device.Dispose();
         _sensors.Dispose();
+        _batteries.Dispose();
         _tray.Dispose();
         base.ExitThreadCore();
     }

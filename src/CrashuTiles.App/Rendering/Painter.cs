@@ -123,6 +123,31 @@ static class Painter
         g.DrawArc(pen, arc, 135, sweep);
     }
 
+    /// <summary>A horizontal battery outline filled to fraction 0..1, with an optional charging bolt.</summary>
+    public static void Battery(Graphics g, RectangleF box, float fraction, Color fill, bool charging, Color outline)
+    {
+        float capW = box.Height * 0.18f, stroke = Math.Max(3, box.Height * 0.09f);
+        var body = new RectangleF(box.X, box.Y, box.Width - capW, box.Height);
+        using (var pen = new Pen(outline, stroke))
+            g.DrawRectangle(pen, body.X, body.Y, body.Width, body.Height);
+        using (var cap = new SolidBrush(outline))
+            g.FillRectangle(cap, body.Right + stroke / 2, box.Y + box.Height * 0.3f, capW - stroke / 2, box.Height * 0.4f);
+        var inner = RectangleF.Inflate(body, -stroke * 1.4f, -stroke * 1.4f);
+        float w = inner.Width * Math.Clamp(fraction, 0, 1);
+        if (w > 0.5f)
+            using (var b = new SolidBrush(fill)) g.FillRectangle(b, inner.X, inner.Y, w, inner.Height);
+        if (!charging) return;
+        // Lightning bolt in the middle, outlined so it reads over any fill.
+        float cx = body.X + body.Width / 2, cy = body.Y + body.Height / 2, h = body.Height * 0.8f, bw = h * 0.42f;
+        PointF[] bolt =
+        [
+            new(cx + bw * 0.15f, cy - h / 2), new(cx - bw * 0.5f, cy + h * 0.06f), new(cx - bw * 0.02f, cy + h * 0.06f),
+            new(cx - bw * 0.15f, cy + h / 2), new(cx + bw * 0.5f, cy - h * 0.06f), new(cx + bw * 0.02f, cy - h * 0.06f),
+        ];
+        using (var p = new Pen(Base, stroke * 0.8f) { LineJoin = LineJoin.Round }) g.DrawPolygon(p, bolt);
+        using (var b = new SolidBrush(Color.White)) g.FillPolygon(b, bolt);
+    }
+
     // ---------- icons ----------
 
     static readonly Dictionary<string, Image?> IconCache = new(StringComparer.OrdinalIgnoreCase);
