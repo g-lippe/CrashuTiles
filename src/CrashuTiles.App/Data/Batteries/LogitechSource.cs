@@ -37,6 +37,7 @@ sealed class LogitechSource : IBatterySource
         public byte BatteryFeature;  // feature index, 0 = none
         public ushort BatteryKind;   // 0x1004 / 0x1000 / 0x1001
         public BatteryReading? Last;
+        public int LastFlags = -1;
     }
 
     readonly Dictionary<string, Channel> _channels = new(StringComparer.OrdinalIgnoreCase);
@@ -167,7 +168,10 @@ sealed class LogitechSource : IBatterySource
             default:                                                              // 0x1001: voltage + flags
                 int mv = (d[0] << 8) | d[1];
                 percent = VoltageToPercent(mv);
+                // Flags bit 7 = external power / charging. While charging the measured voltage
+                // rises, so the percentage reads high until the cable comes out.
                 charging = (d[2] & 0x80) != 0;
+                if (d[2] != k.LastFlags) { k.LastFlags = d[2]; Log.Info($"{k.Name}: {mv} mV, flags 0x{d[2]:X2}"); }
                 break;
         }
         return new BatteryReading(Kind, k.Name, Math.Clamp(percent, 0, 100), charging, true, DateTime.Now);

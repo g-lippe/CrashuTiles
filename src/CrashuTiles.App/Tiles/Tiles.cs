@@ -7,7 +7,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace CrashuTiles.Tiles;
 
-sealed record TileContext(SensorHub Sensors, BatteryHub Batteries, DateTime Now, bool Pressed);
+sealed record TileContext(SensorHub Sensors, BatteryHub Batteries, MediaHub Media, DateTime Now, bool Pressed);
 
 /// <summary>A key's look. Draw fills the whole canvas: 196x196 for keys, 458x196 for the small screen.</summary>
 abstract class Tile
@@ -34,6 +34,8 @@ abstract class Tile
         "gpu" => new SensorTile(cfg, cfg.Sensor ?? "gpu.load"),
         "battery" => new BatteryTile(cfg),
         "batteries" => new MultiBatteryTile(cfg),
+        "sensors" => new MultiSensorTile(cfg),
+        "media" => (cfg.Control ?? "info").ToLowerInvariant() is "info" or "nowplaying" ? new NowPlayingTile(cfg) : new MediaControlTile(cfg),
         "clock" => new ClockTile(cfg),
         "graph" => new GraphTile(cfg),
         _ => new LabelTile(cfg),
@@ -300,9 +302,8 @@ sealed class MultiBatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199,
     public override void Draw(Graphics g, Rectangle r, TileContext ctx)
     {
         var devices = ctx.Batteries.Devices().Skip(Group * PerTile).Take(PerTile).ToList();
-        if (devices.Count == 0) { g.Clear(Color.Black); return; }
-
-        Painter.Background(g, r, Painter.Mix(Accent, Painter.Base, 0.5f));
+        g.Clear(Color.Black);
+        if (devices.Count == 0) return;
         float rowH = (r.Height - 8f) / PerTile;
         for (int i = 0; i < devices.Count; i++)
         {
@@ -313,10 +314,16 @@ sealed class MultiBatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199,
             var row = new RectangleF(r.X + 12, r.Y + 6 + i * rowH, r.Width - 24, rowH);
 
             string pct = d.Percent is int p ? p + "%" : "–";
-            if (d.Charging && online) pct = "+" + pct;
             using var vf = new Font(Painter.Numbers, 30, FontStyle.Bold, GraphicsUnit.Pixel);
             float vw = g.MeasureString(pct, vf).Width;
             Painter.Text(g, pct, Painter.Numbers, FontStyle.Bold, 30, new RectangleF(row.X, row.Y, row.Width, rowH - 14), text, StringAlignment.Far);
+            if (d.Charging && online)
+            {
+                // Bolt just left of the percentage.
+                float bh = 24, bw = bh * 0.5f;
+                Painter.Bolt(g, new RectangleF(row.Right - vw - bw - 2, row.Y + (rowH - 14 - bh) / 2, bw, bh), Color.FromArgb(255, 214, 10), 0);
+                vw += bw + 6;
+            }
             Painter.Text(g, BatteryHub.ShortName(d.Name), Painter.Ui, FontStyle.Regular, 20,
                 new RectangleF(row.X, row.Y, row.Width - vw, rowH - 14), online ? Color.FromArgb(210, 255, 255, 255) : text, StringAlignment.Near, wrap: false);
 
@@ -326,6 +333,155 @@ sealed class MultiBatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199,
             float w = bar.Width * Math.Clamp((d.Percent ?? 0) / 100f, 0, 1);
             using (var fill = new SolidBrush(online ? level : Painter.Mix(level, Color.Black, 0.55f))) g.FillRectangle(fill, bar.X, bar.Y, w, bar.Height);
         }
+    }
+}
+
+/// <summary>
+/// Up to three sensors on one key, laid out like the battery tile: name (in the sensor's family
+/// colour) and value per row, with a bar scaled like the sensor's gauge. Default CPU, GPU, RAM load.
+/// </summary>
+sealed class MultiSensorTile(KeyConfig cfg) : Tile(cfg, Painter.DefaultAccent)
+{
+    static readonly string[] DefaultKeys = ["cpu.load", "gpu.load", "ram.load"];
+
+    public override int RefreshMs => 1000;
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var keys = (Config.Sensors is { Count: > 0 } s ? s : [.. DefaultKeys]).Take(3).ToList();
+        g.Clear(Color.Black);
+        float rowH = (r.Height - 8f) / 3;
+        for (int i = 0; i < keys.Count; i++)
+        {
+            var reading = ctx.Sensors.Get(keys[i]);
+            var family = SensorFormat.GroupColor(keys[i]) ?? Color.White;
+            var color = SensorFormat.Accent(reading, Config, family);
+            var row = new RectangleF(r.X + 12, r.Y + 6 + i * rowH, r.Width - 24, rowH);
+
+            string value = SensorFormat.Value(reading);
+            using var vf = new Font(Painter.Numbers, 30, FontStyle.Bold, GraphicsUnit.Pixel);
+            float vw = g.MeasureString(value, vf).Width;
+            Painter.Text(g, value, Painter.Numbers, FontStyle.Bold, 30, new RectangleF(row.X, row.Y, row.Width, rowH - 14), Color.White, StringAlignment.Far);
+            Painter.Text(g, SensorFormat.Title(keys[i], reading), Painter.Ui, FontStyle.Regular, 22,
+                new RectangleF(row.X, row.Y, row.Width - vw, rowH - 14), family, StringAlignment.Near, wrap: false, minPx: 14);
+
+            var bar = new RectangleF(row.X, row.Bottom - 13, row.Width, 7);
+            using (var track = new SolidBrush(Color.FromArgb(40, 255, 255, 255))) g.FillRectangle(track, bar);
+            float frac = Math.Clamp((reading?.Value ?? 0) / SensorFormat.Max(reading, Config.Max), 0, 1);
+            using (var fill = new SolidBrush(color)) g.FillRectangle(fill, bar.X, bar.Y, bar.Width * frac, bar.Height);
+        }
+    }
+}
+
+/// <summary>
+/// Now playing: album art with title and artist, a pause badge and a progress bar. On the small
+/// screen it lays out wide: art on the left, text, progress and times on the right.
+/// Pressing it toggles play/pause unless it has its own action.
+/// </summary>
+sealed class NowPlayingTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(45, 156, 111))
+{
+    public override int RefreshMs => 1000;
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var m = ctx.Media.State;
+        bool wide = r.Width > r.Height * 1.5f;
+        var dim = Color.FromArgb(190, 255, 255, 255);
+
+        if (m == null || (m.Title.Length == 0 && m.Artist.Length == 0))
+        {
+            g.Clear(Color.Black);
+            float s = r.Height * 0.38f;
+            Painter.Glyph(g, 0xE8D6, new RectangleF(r.X + (r.Width - s) / 2, r.Y + r.Height * 0.16f, s, s), Color.FromArgb(120, 255, 255, 255));
+            Painter.Text(g, "Nothing playing", Painter.Ui, FontStyle.Regular, 22, new RectangleF(r.X + 8, r.Y + r.Height * 0.64f, r.Width - 16, 34), dim);
+            return;
+        }
+
+        float progress = m.Duration > TimeSpan.Zero ? (float)(m.CurrentPosition / m.Duration) : 0;
+
+        if (wide)
+        {
+            g.Clear(Color.Black);
+            var art = new RectangleF(r.X, r.Y, r.Height, r.Height); // flush with the screen's edges
+            DrawArt(g, m, art);
+            if (!m.Playing) PauseBadge(g, art);
+            float x = art.Right + 18, w = r.Right - x - 16;
+            Painter.Text(g, m.App, Painter.Ui, FontStyle.Regular, 18, new RectangleF(x, r.Y + 10, w, 26), Accent, StringAlignment.Near, wrap: false, minPx: 14);
+            Painter.Text(g, m.Title, Painter.Ui, FontStyle.Bold, 30, new RectangleF(x, r.Y + 36, w, 76), Color.White, StringAlignment.Near, StringAlignment.Near, minPx: 20);
+            Painter.Text(g, m.Artist, Painter.Ui, FontStyle.Regular, 22, new RectangleF(x, r.Y + 112, w, 32), dim, StringAlignment.Near, wrap: false, minPx: 16);
+            if (m.Duration > TimeSpan.Zero)
+            {
+                Bar(g, new RectangleF(x, r.Bottom - 34, w, 6), progress);
+                Painter.Text(g, $"{Fmt(m.CurrentPosition)} / {Fmt(m.Duration)}", Painter.Numbers, FontStyle.Regular, 18,
+                    new RectangleF(x, r.Bottom - 26, w, 24), dim, StringAlignment.Far);
+            }
+            return;
+        }
+
+        // Key: a dimmed backdrop of the art, the whole art smaller on top, text underneath.
+        float size = r.Height * 0.52f;
+        var artBox = new RectangleF(r.X + (r.Width - size) / 2, r.Y + 10, size, size);
+        if (m.Art != null)
+        {
+            Painter.Cover(g, m.Art, r);
+            using (var veil = new SolidBrush(Color.FromArgb(185, 0, 0, 0))) g.FillRectangle(veil, r);
+            float scale = Math.Min(artBox.Width / m.Art.Width, artBox.Height / m.Art.Height);
+            float w = m.Art.Width * scale, h = m.Art.Height * scale;
+            g.DrawImage(m.Art, artBox.X + (artBox.Width - w) / 2, artBox.Y + (artBox.Height - h) / 2, w, h);
+        }
+        else DrawArt(g, m, r);
+        if (!m.Playing) PauseBadge(g, r);
+        Painter.Text(g, m.Title, Painter.Ui, FontStyle.Bold, 24, new RectangleF(r.X + 10, r.Bottom - 82, r.Width - 20, 32), Color.White, StringAlignment.Near, wrap: false, minPx: 17);
+        Painter.Text(g, m.Artist, Painter.Ui, FontStyle.Regular, 19, new RectangleF(r.X + 10, r.Bottom - 52, r.Width - 20, 28), dim, StringAlignment.Near, wrap: false, minPx: 15);
+        if (m.Duration > TimeSpan.Zero) Bar(g, new RectangleF(r.X + 10, r.Bottom - 16, r.Width - 20, 6), progress);
+    }
+
+    void DrawArt(Graphics g, MediaState m, RectangleF box)
+    {
+        if (m.Art != null) { Painter.Contain(g, m.Art, box); return; } // whole image, never cropped
+        Painter.Background(g, Rectangle.Round(box), Accent);
+        float s = box.Height * 0.4f;
+        Painter.Glyph(g, 0xE8D6, new RectangleF(box.X + (box.Width - s) / 2, box.Y + box.Height * 0.18f, s, s), Color.FromArgb(150, 255, 255, 255));
+    }
+
+    static void PauseBadge(Graphics g, RectangleF box)
+    {
+        var badge = new RectangleF(box.Right - 50, box.Y + 10, 40, 40);
+        using (var b = new SolidBrush(Color.FromArgb(180, 0, 0, 0))) g.FillEllipse(b, badge);
+        Painter.Glyph(g, 0xE769, RectangleF.Inflate(badge, -6, -6), Color.White);
+    }
+
+    static void Bar(Graphics g, RectangleF bar, float fraction)
+    {
+        using (var track = new SolidBrush(Color.FromArgb(70, 255, 255, 255))) g.FillRectangle(track, bar);
+        using (var fill = new SolidBrush(Color.White)) g.FillRectangle(fill, bar.X, bar.Y, bar.Width * Math.Clamp(fraction, 0, 1), bar.Height);
+    }
+
+    static string Fmt(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+}
+
+/// <summary>Play/pause, next or previous for the current media session. The play/pause key shows the action it will take.</summary>
+sealed class MediaControlTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(45, 156, 111))
+{
+    public string Command => (Config.Control ?? "playpause").ToLowerInvariant();
+
+    public override int RefreshMs => 500; // follow play/pause from other apps quickly
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var m = ctx.Media.State;
+        (int glyph, string label, bool enabled) = Command switch
+        {
+            "next" => (0xE893, "Next", m?.CanNext == true),
+            "prev" or "previous" => (0xE892, "Previous", m?.CanPrevious == true),
+            _ => m?.Playing == true ? (0xE769, "Pause", m.CanPlayPause) : (0xE768, "Play", m?.CanPlayPause == true),
+        };
+        var color = enabled ? Accent : Painter.Mix(Accent, Painter.Base, 0.7f);
+        Painter.Background(g, r, color);
+        var fg = enabled ? Color.White : Color.FromArgb(90, 255, 255, 255);
+        float s = r.Height * 0.46f;
+        Painter.Glyph(g, glyph, new RectangleF(r.X + (r.Width - s) / 2, r.Y + r.Height * 0.12f, s, s), fg);
+        Painter.Text(g, Config.Label ?? label, Painter.Ui, FontStyle.Regular, 26, new RectangleF(r.X + 8, r.Y + r.Height * 0.68f, r.Width - 16, r.Height * 0.28f), fg);
     }
 }
 
@@ -351,7 +507,7 @@ sealed class GraphTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(63, 169, 245))
 
     public override void Draw(Graphics g, Rectangle r, TileContext ctx)
     {
-        g.Clear(Painter.Base);
+        g.Clear(Color.Black);
         var keys = (Config.Sensors is { Count: > 0 } s ? s : ["cpu.load", "ram.load"]).Take(3).ToList();
         var readings = keys.Select(k => ctx.Sensors.Get(k)).ToList();
         var colors = SeriesColors(keys);

@@ -16,6 +16,7 @@ sealed class TrayApp : ApplicationContext
     readonly D200Device _device = new();
     readonly SensorHub _sensors = new();
     readonly BatteryHub _batteries = new();
+    readonly MediaHub _media = new();
     readonly DeckController _deck;
     readonly FileSystemWatcher _watcher;
     readonly System.Windows.Forms.Timer _reloadDebounce = new() { Interval = 400 };
@@ -49,7 +50,7 @@ sealed class TrayApp : ApplicationContext
 
         _device.Log += Log.Info;
         _device.ConnectionChanged += connected => _ui.Post(_ => SetStatus(connected), null);
-        _deck = new DeckController(_device, _sensors, _batteries);
+        _deck = new DeckController(_device, _sensors, _batteries, _media);
 
         LoadConfig();
         _device.Start();
@@ -120,6 +121,7 @@ sealed class TrayApp : ApplicationContext
         _device.Dispose();
         _sensors.Dispose();
         _batteries.Dispose();
+        _media.Dispose();
         _tray.Dispose();
         base.ExitThreadCore();
     }

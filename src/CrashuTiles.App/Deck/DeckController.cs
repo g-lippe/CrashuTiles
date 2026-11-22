@@ -23,6 +23,7 @@ sealed class DeckController : IDisposable
     readonly D200Device _device;
     readonly SensorHub _sensors;
     readonly BatteryHub _batteries;
+    readonly MediaHub _media;
     readonly BlockingCollection<Action> _queue = new();
     readonly Thread _thread;
     readonly System.Threading.Timer _tick;
@@ -40,11 +41,12 @@ sealed class DeckController : IDisposable
 
     public string CurrentPage => _page;
 
-    public DeckController(D200Device device, SensorHub sensors, BatteryHub batteries)
+    public DeckController(D200Device device, SensorHub sensors, BatteryHub batteries, MediaHub media)
     {
         _device = device;
         _sensors = sensors;
         _batteries = batteries;
+        _media = media;
         _device.Button += (i, down) => Post(() => OnButton(i, down));
         _thread = new Thread(Run) { IsBackground = true, Name = "Deck" };
         _thread.Start();
@@ -181,7 +183,7 @@ sealed class DeckController : IDisposable
     {
         var tile = _tiles[i];
         if (tile == null) return;
-        var ctx = new TileContext(_sensors, _batteries, now, _pressed[i]);
+        var ctx = new TileContext(_sensors, _batteries, _media, now, _pressed[i]);
         if (i == SmallScreenIndex) _device.SetSmallImage(tile.Render(SmallWidth, SmallHeight, ctx));
         else _device.SetKey(i, tile.Render(KeySize, KeySize, ctx));
     }
@@ -192,8 +194,15 @@ sealed class DeckController : IDisposable
     {
         if (i < 0 || i >= Slots) return;
         var key = _keys[i];
-        // A "batteries" tile without its own action opens the battery page.
-        var tap = key?.Action ?? (_tiles[i] is MultiBatteryTile ? new ActionConfig { Type = "page", Page = BatteryPageName } : null);
+        // Tiles without their own action get a natural one: batteries open the battery page,
+        // media keys control the current media session.
+        var tap = key?.Action ?? _tiles[i] switch
+        {
+            MultiBatteryTile => new ActionConfig { Type = "page", Page = BatteryPageName },
+            MediaControlTile mc => new ActionConfig { Type = "media", Command = mc.Command },
+            NowPlayingTile => new ActionConfig { Type = "media", Command = "playpause" },
+            _ => null,
+        };
         if (down)
         {
             _pressed[i] = true;
@@ -221,6 +230,7 @@ sealed class DeckController : IDisposable
         {
             case "page": if (a.Page != null) GoTo(a.Page); break;
             case "back": Back(); break;
+            case "media": _media.Command(a.Command); break;
             default: ThreadPool.QueueUserWorkItem(_ => ActionRunner.Run(a)); break;
         }
     }

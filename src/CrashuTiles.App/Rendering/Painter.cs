@@ -52,23 +52,53 @@ static class Painter
 
     public static Color Alpha(Color c, int alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
 
+    /// <summary>Draws an image scaled to cover the box (cropping the overflow), like CSS object-fit: cover.</summary>
+    public static void Cover(Graphics g, Image img, RectangleF box)
+    {
+        float scale = Math.Max(box.Width / img.Width, box.Height / img.Height);
+        float w = img.Width * scale, h = img.Height * scale;
+        var state = g.Save();
+        g.SetClip(box);
+        g.DrawImage(img, box.X + (box.Width - w) / 2, box.Y + (box.Height - h) / 2, w, h);
+        g.Restore(state);
+    }
+
+    /// <summary>
+    /// Shows the whole image (no cropping): a darkened cover-scaled copy fills the box as backdrop,
+    /// and the image itself sits on top, scaled to fit.
+    /// </summary>
+    public static void Contain(Graphics g, Image img, RectangleF box)
+    {
+        Cover(g, img, box);
+        using (var veil = new SolidBrush(Color.FromArgb(170, 0, 0, 0))) g.FillRectangle(veil, box);
+        float scale = Math.Min(box.Width / img.Width, box.Height / img.Height);
+        float w = img.Width * scale, h = img.Height * scale;
+        g.DrawImage(img, box.X + (box.Width - w) / 2, box.Y + (box.Height - h) / 2, w, h);
+    }
+
+    /// <summary>A single Segoe Fluent Icons glyph centred in the box.</summary>
+    public static void Glyph(Graphics g, int code, RectangleF box, Color color) => Icon(g, $"glyph:{code:X4}", box, color);
+
     /// <summary>Dark tile with a soft tint of the accent at the top.</summary>
     public static void Background(Graphics g, Rectangle r, Color accent)
     {
+        // Tiles without a colour of their own sit on plain black, like the gauges.
+        if (accent.ToArgb() == DefaultAccent.ToArgb()) { g.Clear(Color.Black); return; }
         using var b = new LinearGradientBrush(r, Mix(Base, accent, 0.30f), Mix(Base, Color.Black, 0.35f), 90f);
         g.FillRectangle(b, r);
     }
 
     /// <summary>Draws text at the largest size up to maxPx that fits the box (wrapping on spaces).</summary>
     public static void Text(Graphics g, string text, FontFamily family, FontStyle style, float maxPx, RectangleF box,
-        Color color, StringAlignment h = StringAlignment.Center, StringAlignment v = StringAlignment.Center, bool wrap = true)
+        Color color, StringAlignment h = StringAlignment.Center, StringAlignment v = StringAlignment.Center, bool wrap = true, float minPx = 10)
     {
         if (string.IsNullOrEmpty(text)) return;
+        // Shrinks down to minPx; anything still too long ends in an ellipsis.
         using var fmt = new StringFormat { Alignment = h, LineAlignment = v, Trimming = StringTrimming.EllipsisCharacter };
         if (!wrap) fmt.FormatFlags |= StringFormatFlags.NoWrap;
         float px = maxPx;
         Font font = new(family, px, style, GraphicsUnit.Pixel);
-        while (px > 10 && !(wrap ? Fits(g, text, font, box) : g.MeasureString(text, font).Width <= box.Width))
+        while (px > minPx && !(wrap ? Fits(g, text, font, box) : g.MeasureString(text, font).Width <= box.Width))
         {
             font.Dispose();
             px -= 2;
@@ -139,14 +169,22 @@ static class Painter
             using (var b = new SolidBrush(fill)) g.FillRectangle(b, inner.X, inner.Y, w, inner.Height);
         if (!charging) return;
         // Lightning bolt in the middle, outlined so it reads over any fill.
-        float cx = body.X + body.Width / 2, cy = body.Y + body.Height / 2, h = body.Height * 0.8f, bw = h * 0.42f;
+        float h = body.Height * 0.8f;
+        Bolt(g, new RectangleF(body.X + body.Width / 2 - h * 0.21f, body.Y + (body.Height - h) / 2, h * 0.42f, h), Color.White, stroke * 0.8f);
+    }
+
+    /// <summary>A charging lightning bolt filling the box (about 0.42 : 1), with a dark outline.</summary>
+    public static void Bolt(Graphics g, RectangleF box, Color fill, float outline = 2)
+    {
+        float cx = box.X + box.Width / 2, cy = box.Y + box.Height / 2, h = box.Height, bw = box.Width;
         PointF[] bolt =
         [
             new(cx + bw * 0.15f, cy - h / 2), new(cx - bw * 0.5f, cy + h * 0.06f), new(cx - bw * 0.02f, cy + h * 0.06f),
             new(cx - bw * 0.15f, cy + h / 2), new(cx + bw * 0.5f, cy - h * 0.06f), new(cx + bw * 0.02f, cy - h * 0.06f),
         ];
-        using (var p = new Pen(Base, stroke * 0.8f) { LineJoin = LineJoin.Round }) g.DrawPolygon(p, bolt);
-        using (var b = new SolidBrush(Color.White)) g.FillPolygon(b, bolt);
+        if (outline > 0)
+            using (var p = new Pen(Base, outline) { LineJoin = LineJoin.Round }) g.DrawPolygon(p, bolt);
+        using (var b = new SolidBrush(fill)) g.FillPolygon(b, bolt);
     }
 
     // ---------- icons ----------

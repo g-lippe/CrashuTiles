@@ -18,23 +18,29 @@ static class Preview
     {
         string output = args.Length > 1 ? args[1] : "preview.png";
         bool useDefault = args.Contains("--default");
-        string? page = args.Skip(2).FirstOrDefault(a => !a.StartsWith("--"));
-        var cfg = useDefault ? AppConfig.Parse(DefaultConfig.Json) : AppConfig.LoadOrCreate(AppPaths.Config);
+        int ci = Array.IndexOf(args, "--config");
+        string? configPath = ci >= 0 && ci + 1 < args.Length ? args[ci + 1] : null;
+        string? page = args.Skip(2).Where((a, i) => !a.StartsWith("--") && a != configPath).FirstOrDefault();
+        var cfg = useDefault ? AppConfig.Parse(DefaultConfig.Json)
+            : configPath != null ? AppConfig.Parse(File.ReadAllText(configPath))
+            : AppConfig.LoadOrCreate(AppPaths.Config);
         page ??= cfg.StartPage;
 
         // Tiles request their sensors on first draw, so draw once to register them,
         // then sample for a few seconds so the graphs have something to show.
         using var sensors = new SensorHub(autoSample: false);
         using var batteries = new CrashuTiles.Data.Batteries.BatteryHub(autoPoll: false);
+        using var media = new MediaHub(autoPoll: false);
         sensors.Sample();
         batteries.Poll();
+        media.PollAsync().GetAwaiter().GetResult();
         var keys = page == Deck.DeckController.BatteryPageName ? Deck.DeckController.BatteryPage(batteries) : cfg.Pages[page];
         var tiles = new Dictionary<int, Tile>();
         for (int i = 0; i <= KeyCount; i++)
             if (keys.TryGetValue(i == SmallScreenIndex ? "small" : i.ToString(), out var kc) && !(i == SmallScreenIndex && kc.Native != null))
                 tiles[i] = Tile.Create(kc);
         Tile.AssignGroups(Enumerable.Range(0, KeyCount + 1).Select(i => tiles.GetValueOrDefault(i)));
-        var warm = new TileContext(sensors, batteries, DateTime.Now, false);
+        var warm = new TileContext(sensors, batteries, media, DateTime.Now, false);
         foreach (var (i, t) in tiles) t.Render(i == SmallScreenIndex ? SmallWidth : KeySize, KeySize, warm);
         for (int s = 0; s < 8; s++) { Thread.Sleep(500); sensors.Sample(); }
 
@@ -44,7 +50,7 @@ static class Preview
         using (g)
         {
             g.Clear(Color.FromArgb(40, 42, 48));
-            var ctx = new TileContext(sensors, batteries, DateTime.Now, false);
+            var ctx = new TileContext(sensors, batteries, media, DateTime.Now, false);
             for (int i = 0; i <= KeyCount; i++)
             {
                 bool small = i == SmallScreenIndex;

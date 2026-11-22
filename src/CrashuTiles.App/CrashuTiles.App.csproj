@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>CrashuTiles</AssemblyName>
     <RootNamespace>CrashuTiles</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 

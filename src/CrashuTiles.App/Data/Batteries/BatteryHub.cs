@@ -55,12 +55,17 @@ sealed class BatteryHub : IDisposable
 
     public void Poll()
     {
-        var fresh = new List<BatteryReading>();
+        var raw = new List<BatteryReading>();
         foreach (var s in _sources)
         {
-            try { fresh.AddRange(s.Poll()); }
+            try { raw.AddRange(s.Poll()); }
             catch (Exception e) { Log.Info($"Battery source {s.Kind} failed: {e.Message}"); }
         }
+        // One device can be reachable two ways (a mouse on its cable and through its receiver):
+        // keep one reading per name, preferring online, then the freshest.
+        var fresh = raw.GroupBy(r => r.Source + "|" + r.Name)
+            .Select(g => g.OrderByDescending(r => r.Online).ThenByDescending(r => r.LastSeen).First())
+            .ToList();
 
         // Remember every device's last level (also across restarts), so a sleeping mouse or a
         // switched-off headset shows its last value marked offline instead of "not found".

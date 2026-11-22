@@ -18,6 +18,14 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
     - Tiles call `Get(key)`, which starts tracking that key, and read a snapshot with a 60-sample history.
     - Keys are aliases (the table in `SensorHub`) or raw LHM identifiers starting with `/`.
   - `Data/Batteries/*`: `BatteryHub` plus one source per vendor (see Battery facts).
+  - `Data/MediaHub`: `GlobalSystemMediaTransportControlsSessionManager`, polled every 1 s.
+    - It holds the current session plus a `MediaState` snapshot: title, artist, app, status, controls, timeline and an art `Bitmap`.
+    - Commands go to the session's `Try*Async` methods.
+    - Art is reloaded when the track key changes and retried up to five times, because some apps attach the thumbnail late.
+    - Browsers give their own logo as the art.
+  - `MultiSensorTile` ("sensors"): three sensors per key, the same row layout as `MultiBatteryTile`.
+  - The maintainer's main page: the usage tile and the GPU temp gauge (both open the "sensors" page), the batteries, Explorer/Snip/More, and now playing on the small screen.
+  - Media tiles: `NowPlayingTile` (`control` info, wide on the small screen) and `MediaControlTile`. Default taps are filled in by `DeckController.OnButton`.
   - `Actions/*`, `Config/*` (`DefaultConfig.cs` is the first-run config).
   - `Preview.cs`: `--preview out.png [page] [--default]` renders a page to an image with no device.
 - `tools/probe`: the original PowerShell + C# 5 probe and benchmarks, loaded via Add-Type with no build step.
@@ -32,6 +40,8 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
   - It has only feature 0x1001 (voltage); 4056 mV is about 89% on the Li-ion curve.
   - We use the long-report collection (page 0xFF00, usage 2, 20 bytes) with software id 0x0A, alongside G HUB.
   - Receiver errors: 0x08 means an empty slot, **0x09 means the device is asleep or unreachable**. A sleeping mouse can't be discovered until it wakes.
+  - **On its USB cable** it shows up as `046D:C08D` (HID++ slot 0xFF), and the receiver loses it. `BatteryHub` keeps one reading per source+name, preferring online and then the newest, so it isn't listed twice.
+  - **Charging:** flags bit 7 is set (0x80) while charging. The measured voltage rises under charge (14% jumped to 83% when plugged in), so voltage-based percentages read high until the cable comes out. Flag changes are logged.
 - **Corsair HS80:** reads through iCUE SDK v4 (`CorsairReadDeviceProperty`, `CDPI_BatteryLevel` = 9, an int at offset 8 of the 24-byte property struct). It's only listed while the headset is on. The DLL is not redistributable, so the user supplies it. Third-party control was already enabled in iCUE.
 - **Bluetooth:** read via CfgMgr32 on present BTHENUM/BTHLE nodes. Untested with a device that reports its battery. **AirPods have no battery property in Windows.**
 - **AirPods:** `AirPodsSource` uses the WinRT `BluetoothLEAdvertisementWatcher`, which is why the app's TFM is `net10.0-windows10.0.19041.0` and the exe now builds into that folder.
@@ -81,5 +91,6 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 1. ~~Device layer, tiles, CPU/RAM, tray app~~ (v0.1)
 2. ~~Sensor tiles via LibreHardwareMonitor, non-admin set~~ (v0.2). Still open: CPU temperature, board fans and disk temperatures through an elevated helper.
 3. ~~Peripheral batteries: Logitech HID++, Corsair iCUE, Bluetooth, AirPods BLE, XInput~~ (v0.3)
-4. Media now playing (GlobalSystemMediaTransportControls), audio device switching, toggles that show state.
+4. ~~Media now playing and state-aware media keys~~ (v0.4). Still open: audio device switching, mute/volume, and other toggles that show state.
 5. Settings web page served locally (plain HTML/JS), autostart with Windows.
+   - The tile picker must offer **every** tile type, including ones not in the default layout. The maintainer removed the media control keys (`media` + `control`: `playpause`/`next`/`prev`) from his layout but wants to be able to add them back from the page.

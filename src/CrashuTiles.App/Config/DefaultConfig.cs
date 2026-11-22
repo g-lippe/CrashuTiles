@@ -11,9 +11,12 @@ static class DefaultConfig
   //   row 1:   5   6   7   8   9
   //   row 2:  10  11  12  [ small ]
   //
-  // tile:    label (default) | sensor | battery | batteries | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  // tile:    label (default) | sensor | sensors | battery | batteries | media | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  //          sensors: up to three sensors on one key ("sensors": [...], default CPU, GPU, RAM load)
   //          batteries: three devices per tile; each further "batteries" tile on the page shows the next three.
   //          Pressing one (unless it has its own action) opens a page with one battery per key.
+  //          media: now playing (art, title, artist, progress; press = play/pause), works wide on "small" too.
+  //          With "control": "playpause" | "next" | "prev" it's a control key that follows the player's state.
   // sensor:  cpu.load cpu.coremax cpu.temp* cpu.power* cpu.clock*  ram.load ram.used ram.free
   //          gpu.load gpu.temp gpu.hotspot gpu.memtemp gpu.power gpu.clock gpu.fan gpu.vram gpu.vramused
   //          net.down net.up (busiest adapter; "net.down@Ethernet 2" picks one)
@@ -31,6 +34,7 @@ static class DefaultConfig
   //          { "type": "launch", "path": "notepad.exe", "args": "" }
   //          { "type": "url", "url": "https://example.com" }
   //          { "type": "hotkey", "keys": "ctrl+shift+esc" }   (also playpause, next, prev, mute, volup, voldown)
+  //          { "type": "media", "command": "playpause" }       (play, pause, next, prev: sent to the playing app)
   //          { "type": "page", "page": "tools" }  |  { "type": "back" }  |  { "type": "config" }
   // small:   any tile drawn wide, or "native": clock | clock-date | clock-weekday | clock-full | dial | stats
 
@@ -38,19 +42,16 @@ static class DefaultConfig
   "startPage": "main",
   "pages": {
     "main": {
-      "0":  { "tile": "sensor", "sensor": "cpu.load", "warn": 80, "crit": 95 },
-      "1":  { "tile": "sensor", "sensor": "gpu.load", "warn": 90 },
-      "2":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85 },
-      "3":  { "tile": "sensor", "sensor": "ram.load", "warn": 85 },
-      "4":  { "tile": "batteries" },
-
-      "5":  { "tile": "batteries" },
+      "0":  { "tile": "sensors", "sensors": ["cpu.load", "gpu.load", "ram.load"], "action": { "type": "page", "page": "sensors" } },
+      "1":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85, "action": { "type": "page", "page": "sensors" } },
+      "2":  { "tile": "batteries" },
+      "3":  { "tile": "batteries" },
 
       "10": { "label": "Explorer", "action": { "type": "launch", "path": "explorer.exe" } },
       "11": { "label": "Snip", "icon": "glyph:E722", "action": { "type": "hotkey", "keys": "win+shift+s" } },
       "12": { "label": "More", "icon": "glyph:E712", "action": { "type": "page", "page": "tools" } },
 
-      "small": { "tile": "graph", "sensors": ["cpu.load", "gpu.load", "ram.load"] }
+      "small": { "tile": "media" }
     },
     "tools": {
       "0":  { "label": "Back", "icon": "glyph:E72B", "color": "#F5A623", "action": { "type": "back" } },
@@ -64,19 +65,19 @@ static class DefaultConfig
     },
     "sensors": {
       "0":  { "label": "Back", "icon": "glyph:E72B", "color": "#F5A623", "action": { "type": "back" } },
-      "1":  { "tile": "sensor", "sensor": "cpu.coremax", "style": "gauge" },
-      "2":  { "tile": "sensor", "sensor": "cpu.temp" },
-      "3":  { "tile": "sensor", "sensor": "net.down" },
-      "4":  { "tile": "sensor", "sensor": "net.up" },
+      "1":  { "tile": "sensor", "sensor": "cpu.load", "warn": 80, "crit": 95 },
+      "2":  { "tile": "sensor", "sensor": "gpu.load", "warn": 90 },
+      "3":  { "tile": "sensor", "sensor": "ram.load", "warn": 85 },
+      "4":  { "tile": "sensor", "sensor": "cpu.coremax", "style": "gauge" },
       "5":  { "tile": "sensor", "sensor": "gpu.hotspot", "warn": 85, "crit": 95 },
       "6":  { "tile": "sensor", "sensor": "gpu.memtemp", "warn": 90, "crit": 100 },
       "7":  { "tile": "sensor", "sensor": "gpu.power", "max": 200 },
       "8":  { "tile": "sensor", "sensor": "gpu.fan", "style": "gauge", "max": 3000 },
       "9":  { "tile": "sensor", "sensor": "gpu.vram", "style": "gauge" },
-      "10": { "tile": "sensor", "sensor": "gpu.clock" },
-      "11": { "tile": "sensor", "sensor": "ram.used" },
-      "12": { "tile": "sensor", "sensor": "gpu.vramused" },
-      "small": { "tile": "graph", "sensors": ["gpu.temp", "gpu.hotspot", "gpu.memtemp"] }
+      "10": { "tile": "sensor", "sensor": "net.down" },
+      "11": { "tile": "sensor", "sensor": "net.up" },
+      "12": { "tile": "sensor", "sensor": "gpu.clock" },
+      "small": { "tile": "graph", "sensors": ["cpu.load", "gpu.load", "ram.load"] }
     }
   }
 }
