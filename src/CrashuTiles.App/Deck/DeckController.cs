@@ -24,6 +24,7 @@ sealed class DeckController : IDisposable
     readonly SensorHub _sensors;
     readonly BatteryHub _batteries;
     readonly MediaHub _media;
+    readonly AudioHub _audio;
     readonly BlockingCollection<Action> _queue = new();
     readonly Thread _thread;
     readonly System.Threading.Timer _tick;
@@ -41,12 +42,13 @@ sealed class DeckController : IDisposable
 
     public string CurrentPage => _page;
 
-    public DeckController(D200Device device, SensorHub sensors, BatteryHub batteries, MediaHub media)
+    public DeckController(D200Device device, SensorHub sensors, BatteryHub batteries, MediaHub media, AudioHub audio)
     {
         _device = device;
         _sensors = sensors;
         _batteries = batteries;
         _media = media;
+        _audio = audio;
         _device.Button += (i, down) => Post(() => OnButton(i, down));
         _thread = new Thread(Run) { IsBackground = true, Name = "Deck" };
         _thread.Start();
@@ -101,8 +103,25 @@ sealed class DeckController : IDisposable
         return keys;
     }
 
+    /// <summary>Built-in output picker: one key per active output device; opened by an "output" audio tile.</summary>
+    public const string AudioPageName = "__audio";
+
+    public static Dictionary<string, KeyConfig> AudioPage(AudioHub hub)
+    {
+        var keys = new Dictionary<string, KeyConfig>
+        {
+            ["0"] = new() { Label = "Back", Icon = "glyph:E72B", Color = "#F5A623", Action = new ActionConfig { Type = "back" } },
+            ["small"] = new() { Tile = "media" },
+        };
+        int k = 1;
+        foreach (var d in (hub.State?.Outputs ?? []).Take(KeyCount - 1))
+            keys[(k++).ToString()] = new KeyConfig { Tile = "audio", Control = "device", Match = d.Id, Label = d.Name };
+        return keys;
+    }
+
     Dictionary<string, KeyConfig>? PageKeys(string page) =>
         page == BatteryPageName ? BatteryPage(_batteries)
+        : page == AudioPageName ? AudioPage(_audio)
         : _config != null && _config.Pages.TryGetValue(page, out var keys) ? keys : null;
 
     void Load(string page)
@@ -183,7 +202,7 @@ sealed class DeckController : IDisposable
     {
         var tile = _tiles[i];
         if (tile == null) return;
-        var ctx = new TileContext(_sensors, _batteries, _media, now, _pressed[i]);
+        var ctx = new TileContext(_sensors, _batteries, _media, _audio, now, _pressed[i]);
         if (i == SmallScreenIndex) _device.SetSmallImage(tile.Render(SmallWidth, SmallHeight, ctx));
         else _device.SetKey(i, tile.Render(KeySize, KeySize, ctx));
     }
@@ -201,6 +220,14 @@ sealed class DeckController : IDisposable
             MultiBatteryTile => new ActionConfig { Type = "page", Page = BatteryPageName },
             MediaControlTile mc => new ActionConfig { Type = "media", Command = mc.Command },
             NowPlayingTile => new ActionConfig { Type = "media", Command = "playpause" },
+            AudioTile at => at.Control switch
+            {
+                "mute" => new ActionConfig { Type = "audio", Command = "mute" },
+                "mic" => new ActionConfig { Type = "audio", Command = "micmute" },
+                "volup" or "voldown" => new ActionConfig { Type = "audio", Command = at.Control, Step = key?.Step },
+                "device" => new ActionConfig { Type = "audio", Command = "output", Device = key?.Match },
+                _ => new ActionConfig { Type = "page", Page = AudioPageName },
+            },
             _ => null,
         };
         if (down)
@@ -231,8 +258,31 @@ sealed class DeckController : IDisposable
             case "page": if (a.Page != null) GoTo(a.Page); break;
             case "back": Back(); break;
             case "media": _media.Command(a.Command); break;
+            case "audio": ThreadPool.QueueUserWorkItem(_ => Audio(a)); break;
             default: ThreadPool.QueueUserWorkItem(_ => ActionRunner.Run(a)); break;
         }
+    }
+
+    void Audio(ActionConfig a)
+    {
+        int step = Math.Clamp(a.Step ?? 5, 1, 50);
+        switch ((a.Command ?? "").ToLowerInvariant())
+        {
+            case "mute": _audio.ToggleMute(); break;
+            case "micmute": _audio.ToggleMicMute(); break;
+            case "volup": _audio.Nudge(step); break;
+            case "voldown": _audio.Nudge(-step); break;
+            case "output":
+                // Exact id, or the first output whose name contains the text.
+                var outputs = _audio.State?.Outputs ?? [];
+                var dev = outputs.FirstOrDefault(d => d.Id == a.Device)
+                          ?? outputs.FirstOrDefault(d => a.Device != null && d.Name.Contains(a.Device, StringComparison.OrdinalIgnoreCase));
+                if (dev != null) _audio.SetDefaultOutput(dev.Id);
+                else Log.Info($"No output device matching '{a.Device}'");
+                break;
+            default: Log.Info($"Unknown audio command '{a.Command}'"); break;
+        }
+        Post(() => Draw(force: false));
     }
 
     public void Dispose()

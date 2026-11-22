@@ -54,8 +54,10 @@ public sealed class KeyConfig
     public string? Style { get; set; }
     /// <summary>Top of the scale for sparklines and gauges. Defaults to 100 for % and °C, else the recent peak.</summary>
     public float? Max { get; set; }
-    /// <summary>Media tiles: info (now playing, default), playpause, next or prev.</summary>
+    /// <summary>Media tiles: info (default), playpause, next, prev. Audio tiles: output (default), mute, mic, volup, voldown.</summary>
     public string? Control { get; set; }
+    /// <summary>Audio volup / voldown tiles: percentage points per press (default 5).</summary>
+    public int? Step { get; set; }
     /// <summary>Battery tiles: logitech, corsair, bluetooth, xinput or any.</summary>
     public string? Battery { get; set; }
     /// <summary>Battery tiles: part of the device name to pick (e.g. "G502", "AirPods"); default the first device.</summary>
@@ -78,10 +80,14 @@ public sealed class KeyConfig
 
 public sealed class ActionConfig
 {
-    /// <summary>launch, url, hotkey, media, page, back, config.</summary>
+    /// <summary>launch, url, hotkey, media, audio, page, back, config.</summary>
     public string Type { get; set; } = "";
-    /// <summary>media actions: playpause, play, pause, next, prev.</summary>
+    /// <summary>media: playpause, play, pause, next, prev. audio: mute, micmute, volup, voldown, output (sets Device as default).</summary>
     public string? Command { get; set; }
+    /// <summary>audio output command: the device to make default (id or part of its name).</summary>
+    public string? Device { get; set; }
+    /// <summary>audio volup / voldown: percentage points (default 5).</summary>
+    public int? Step { get; set; }
     public string? Path { get; set; }
     public string? Args { get; set; }
     public string? Url { get; set; }

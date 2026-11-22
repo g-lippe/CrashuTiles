@@ -7,7 +7,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace CrashuTiles.Tiles;
 
-sealed record TileContext(SensorHub Sensors, BatteryHub Batteries, MediaHub Media, DateTime Now, bool Pressed);
+sealed record TileContext(SensorHub Sensors, BatteryHub Batteries, MediaHub Media, AudioHub Audio, DateTime Now, bool Pressed);
 
 /// <summary>A key's look. Draw fills the whole canvas: 196x196 for keys, 458x196 for the small screen.</summary>
 abstract class Tile
@@ -35,6 +35,7 @@ abstract class Tile
         "battery" => new BatteryTile(cfg),
         "batteries" => new MultiBatteryTile(cfg),
         "sensors" => new MultiSensorTile(cfg),
+        "audio" => new AudioTile(cfg),
         "media" => (cfg.Control ?? "info").ToLowerInvariant() is "info" or "nowplaying" ? new NowPlayingTile(cfg) : new MediaControlTile(cfg),
         "clock" => new ClockTile(cfg),
         "graph" => new GraphTile(cfg),
@@ -482,6 +483,123 @@ sealed class MediaControlTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(45, 156,
         float s = r.Height * 0.46f;
         Painter.Glyph(g, glyph, new RectangleF(r.X + (r.Width - s) / 2, r.Y + r.Height * 0.12f, s, s), fg);
         Painter.Text(g, Config.Label ?? label, Painter.Ui, FontStyle.Regular, 26, new RectangleF(r.X + 8, r.Y + r.Height * 0.68f, r.Width - 16, r.Height * 0.28f), fg);
+    }
+}
+
+/// <summary>
+/// Audio keys, chosen by "control":
+///   output  current output device and volume; pressing opens the output picker page
+///   mute    speaker mute toggle showing the volume (red while muted)
+///   mic     microphone mute toggle (red while muted)
+///   volup / voldown  volume steps ("step", default 5)
+///   device  one output on the picker page (Match = device id); pressing makes it the default
+/// </summary>
+sealed class AudioTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(108, 99, 255))
+{
+    static readonly Color Selected = Color.FromArgb(52, 199, 89);
+    const int GlyphVolume = 0xE767, GlyphMute = 0xE74F, GlyphMic = 0xE720, GlyphHeadphones = 0xE7F6, GlyphSpeakers = 0xE7F5, GlyphCheck = 0xE73E;
+
+    public string Control => (Config.Control ?? "output").ToLowerInvariant();
+
+    public override int RefreshMs => 500; // follow the volume wheel and the tray flyout
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var a = ctx.Audio.State;
+        var dim = Color.FromArgb(200, 255, 255, 255);
+        switch (Control)
+        {
+            case "mute":
+            {
+                bool muted = a?.Muted == true;
+                Backdrop(g, r, muted);
+                Big(g, r, muted ? GlyphMute : GlyphVolume, Color.White);
+                Label(g, r, a == null ? "–" : muted ? "Muted" : $"{a.Volume}%", Color.White);
+                break;
+            }
+            case "mic":
+            {
+                bool muted = a?.MicMuted == true;
+                Backdrop(g, r, muted);
+                Big(g, r, GlyphMic, Color.White);
+                if (muted) Slash(g, r);
+                Label(g, r, a?.Mic == null ? "No mic" : muted ? "Mic muted" : "Mic on", Color.White);
+                break;
+            }
+            case "volup" or "voldown":
+            {
+                Backdrop(g, r, false);
+                bool up = Control == "volup";
+                Big(g, r, GlyphVolume, Color.White);
+                Painter.Text(g, up ? "+" : "−", Painter.Numbers, FontStyle.Bold, 44, new RectangleF(r.Right - 62, r.Y + 6, 52, 52), Color.White);
+                Label(g, r, a == null ? "–" : $"{a.Volume}%", Color.White);
+                break;
+            }
+            case "device":
+            {
+                var dev = a?.Outputs.FirstOrDefault(d => d.Id == Config.Match);
+                bool active = dev?.IsDefault == true || a?.Output?.Id == Config.Match;
+                Backdrop(g, r, false);
+                string name = dev?.Name ?? Config.Label ?? "Disconnected";
+                Big(g, r, DeviceGlyph(name), active ? Color.White : dim, top: 0.10f, size: 0.38f);
+                if (active) Painter.Glyph(g, GlyphCheck, new RectangleF(r.Right - 46, r.Y + 8, 38, 38), Selected);
+                var (main, sub) = SplitName(name);
+                Painter.Text(g, main, Painter.Ui, FontStyle.Regular, 22, new RectangleF(r.X + 8, r.Y + r.Height * 0.52f, r.Width - 16, r.Height * 0.30f), Color.White, minPx: 13);
+                if (sub.Length > 0)
+                    Painter.Text(g, sub, Painter.Ui, FontStyle.Regular, 16, new RectangleF(r.X + 8, r.Bottom - 30, r.Width - 16, 24), dim, wrap: false, minPx: 11);
+                break;
+            }
+            default: // output
+            {
+                Backdrop(g, r, false);
+                var dev = a?.Output;
+                string name = dev?.Name ?? "No output";
+                Big(g, r, DeviceGlyph(name), Color.White, top: 0.10f, size: 0.36f);
+                if (a != null)
+                    Painter.Text(g, a.Muted ? "muted" : $"{a.Volume}%", Painter.Numbers, FontStyle.Bold, 24,
+                        new RectangleF(r.Right - 80, r.Y + 8, 72, 30), a.Muted ? SensorFormat.Crit : dim, StringAlignment.Far);
+                var (main, sub) = SplitName(name);
+                Painter.Text(g, main, Painter.Ui, FontStyle.Regular, 22, new RectangleF(r.X + 8, r.Y + r.Height * 0.52f, r.Width - 16, r.Height * 0.30f), Color.White, minPx: 13);
+                if (sub.Length > 0)
+                    Painter.Text(g, sub, Painter.Ui, FontStyle.Regular, 16, new RectangleF(r.X + 8, r.Bottom - 30, r.Width - 16, 24), dim, wrap: false, minPx: 11);
+                break;
+            }
+        }
+    }
+
+    /// <summary>Black like the other tiles; red when something is muted. A configured "color" still wins.</summary>
+    void Backdrop(Graphics g, Rectangle r, bool muted)
+    {
+        if (muted) Painter.Background(g, r, SensorFormat.Crit);
+        else if (Config.Color != null) Painter.Background(g, r, Accent);
+        else g.Clear(Color.Black);
+    }
+
+    static void Big(Graphics g, Rectangle r, int glyph, Color c, float top = 0.12f, float size = 0.46f)
+    {
+        float s = r.Height * size;
+        Painter.Glyph(g, glyph, new RectangleF(r.X + (r.Width - s) / 2, r.Y + r.Height * top, s, s), c);
+    }
+
+    static void Label(Graphics g, Rectangle r, string text, Color c) =>
+        Painter.Text(g, text, Painter.Ui, FontStyle.Regular, 26, new RectangleF(r.X + 8, r.Y + r.Height * 0.68f, r.Width - 16, r.Height * 0.28f), c);
+
+    static void Slash(Graphics g, Rectangle r)
+    {
+        using var pen = new Pen(Color.White, 8) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
+        g.DrawLine(pen, r.X + r.Width * 0.30f, r.Y + r.Height * 0.12f, r.X + r.Width * 0.70f, r.Y + r.Height * 0.58f);
+    }
+
+    static int DeviceGlyph(string name) =>
+        System.Text.RegularExpressions.Regex.IsMatch(name, "head|fone|airpod|earbud|buds|hs\\d", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            ? GlyphHeadphones : GlyphSpeakers;
+
+    /// <summary>"Speakers (Realtek(R) Audio)" -> ("Realtek(R) Audio", "Speakers"): the product is the interesting part.</summary>
+    public static (string Main, string Sub) SplitName(string name)
+    {
+        int open = name.IndexOf('(');
+        if (open <= 0 || !name.EndsWith(')')) return (name, "");
+        return (name[(open + 1)..^1].Trim(), name[..open].Trim());
     }
 }
 

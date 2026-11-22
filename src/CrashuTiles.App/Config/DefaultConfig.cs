@@ -11,12 +11,13 @@ static class DefaultConfig
   //   row 1:   5   6   7   8   9
   //   row 2:  10  11  12  [ small ]
   //
-  // tile:    label (default) | sensor | sensors | battery | batteries | media | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  // tile:    label (default) | sensor | sensors | battery | batteries | media | audio | clock | graph   (cpu, ram, gpu = sensor shortcuts)
   //          sensors: up to three sensors on one key ("sensors": [...], default CPU, GPU, RAM load)
   //          batteries: three devices per tile; each further "batteries" tile on the page shows the next three.
   //          Pressing one (unless it has its own action) opens a page with one battery per key.
   //          media: now playing (art, title, artist, progress; press = play/pause), works wide on "small" too.
   //          With "control": "playpause" | "next" | "prev" it's a control key that follows the player's state.
+  //          audio: "control": output (device + volume; press = pick the output) | mute | mic | volup | voldown ("step": 5)
   // sensor:  cpu.load cpu.coremax cpu.temp* cpu.power* cpu.clock*  ram.load ram.used ram.free
   //          gpu.load gpu.temp gpu.hotspot gpu.memtemp gpu.power gpu.clock gpu.fan gpu.vram gpu.vramused
   //          net.down net.up (busiest adapter; "net.down@Ethernet 2" picks one)
@@ -35,6 +36,7 @@ static class DefaultConfig
   //          { "type": "url", "url": "https://example.com" }
   //          { "type": "hotkey", "keys": "ctrl+shift+esc" }   (also playpause, next, prev, mute, volup, voldown)
   //          { "type": "media", "command": "playpause" }       (play, pause, next, prev: sent to the playing app)
+  //          { "type": "audio", "command": "mute" }            (micmute, volup, voldown, or "output" with "device": "HS80")
   //          { "type": "page", "page": "tools" }  |  { "type": "back" }  |  { "type": "config" }
   // small:   any tile drawn wide, or "native": clock | clock-date | clock-weekday | clock-full | dial | stats
 
@@ -46,6 +48,7 @@ static class DefaultConfig
       "1":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85, "action": { "type": "page", "page": "sensors" } },
       "2":  { "tile": "batteries" },
       "3":  { "tile": "batteries" },
+      "4":  { "tile": "audio", "control": "output" },
 
       "10": { "label": "Explorer", "action": { "type": "launch", "path": "explorer.exe" } },
       "11": { "label": "Snip", "icon": "glyph:E722", "action": { "type": "hotkey", "keys": "win+shift+s" } },

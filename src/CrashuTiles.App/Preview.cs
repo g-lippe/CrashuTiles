@@ -1,4 +1,4 @@
-using CrashuTiles.Config;
+﻿using CrashuTiles.Config;
 using CrashuTiles.Data;
 using CrashuTiles.Rendering;
 using CrashuTiles.Tiles;
@@ -31,16 +31,20 @@ static class Preview
         using var sensors = new SensorHub(autoSample: false);
         using var batteries = new CrashuTiles.Data.Batteries.BatteryHub(autoPoll: false);
         using var media = new MediaHub(autoPoll: false);
+        using var audio = new AudioHub(autoPoll: false);
         sensors.Sample();
         batteries.Poll();
         media.PollAsync().GetAwaiter().GetResult();
-        var keys = page == Deck.DeckController.BatteryPageName ? Deck.DeckController.BatteryPage(batteries) : cfg.Pages[page];
+        audio.Poll();
+        var keys = page == Deck.DeckController.BatteryPageName ? Deck.DeckController.BatteryPage(batteries)
+            : page == Deck.DeckController.AudioPageName ? Deck.DeckController.AudioPage(audio)
+            : cfg.Pages[page];
         var tiles = new Dictionary<int, Tile>();
         for (int i = 0; i <= KeyCount; i++)
             if (keys.TryGetValue(i == SmallScreenIndex ? "small" : i.ToString(), out var kc) && !(i == SmallScreenIndex && kc.Native != null))
                 tiles[i] = Tile.Create(kc);
         Tile.AssignGroups(Enumerable.Range(0, KeyCount + 1).Select(i => tiles.GetValueOrDefault(i)));
-        var warm = new TileContext(sensors, batteries, media, DateTime.Now, false);
+        var warm = new TileContext(sensors, batteries, media, audio, DateTime.Now, false);
         foreach (var (i, t) in tiles) t.Render(i == SmallScreenIndex ? SmallWidth : KeySize, KeySize, warm);
         for (int s = 0; s < 8; s++) { Thread.Sleep(500); sensors.Sample(); }
 
@@ -50,7 +54,7 @@ static class Preview
         using (g)
         {
             g.Clear(Color.FromArgb(40, 42, 48));
-            var ctx = new TileContext(sensors, batteries, media, DateTime.Now, false);
+            var ctx = new TileContext(sensors, batteries, media, audio, DateTime.Now, false);
             for (int i = 0; i <= KeyCount; i++)
             {
                 bool small = i == SmallScreenIndex;

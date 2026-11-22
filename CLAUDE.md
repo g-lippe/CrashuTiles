@@ -23,6 +23,11 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
     - Commands go to the session's `Try*Async` methods.
     - Art is reloaded when the track key changes and retried up to five times, because some apps attach the thumbnail late.
     - Browsers give their own logo as the art.
+  - `Data/AudioHub` + `Data/CoreAudio.cs`: Core Audio COM via `[ComImport]`, polled every 500 ms.
+    - It reads the default output and mic (name, volume, mute) and lists active outputs every 5 s.
+    - Switching the default uses the undocumented `IPolicyConfig` (`SetDefaultEndpoint` for all three roles), which is the only way and is what every audio switcher uses.
+    - `AudioTile` handles the controls `output`, `mute`, `mic`, `volup`, `voldown` and `device`. `DeckController.AudioPage` (`__audio`) is the output picker.
+    - Windows names look like "Alto-falantes (Realtek(R) Audio)". `AudioTile.SplitName` shows the part in parentheses as the main name.
   - `MultiSensorTile` ("sensors"): three sensors per key, the same row layout as `MultiBatteryTile`.
   - The maintainer's main page: the usage tile and the GPU temp gauge (both open the "sensors" page), the batteries, Explorer/Snip/More, and now playing on the small screen.
   - Media tiles: `NowPlayingTile` (`control` info, wide on the small screen) and `MediaControlTile`. Default taps are filled in by `DeckController.OnButton`.
@@ -91,6 +96,6 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 1. ~~Device layer, tiles, CPU/RAM, tray app~~ (v0.1)
 2. ~~Sensor tiles via LibreHardwareMonitor, non-admin set~~ (v0.2). Still open: CPU temperature, board fans and disk temperatures through an elevated helper.
 3. ~~Peripheral batteries: Logitech HID++, Corsair iCUE, Bluetooth, AirPods BLE, XInput~~ (v0.3)
-4. ~~Media now playing and state-aware media keys~~ (v0.4). Still open: audio device switching, mute/volume, and other toggles that show state.
+4. ~~Media now playing and state-aware media keys~~ (v0.4). ~~Audio output switching, mute, mic mute, volume~~ (v0.5).
 5. Settings web page served locally (plain HTML/JS), autostart with Windows.
    - The tile picker must offer **every** tile type, including ones not in the default layout. The maintainer removed the media control keys (`media` + `control`: `playpause`/`next`/`prev`) from his layout but wants to be able to add them back from the page.

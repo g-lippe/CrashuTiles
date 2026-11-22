@@ -17,6 +17,7 @@ sealed class TrayApp : ApplicationContext
     readonly SensorHub _sensors = new();
     readonly BatteryHub _batteries = new();
     readonly MediaHub _media = new();
+    readonly AudioHub _audio = new();
     readonly DeckController _deck;
     readonly FileSystemWatcher _watcher;
     readonly System.Windows.Forms.Timer _reloadDebounce = new() { Interval = 400 };
@@ -50,7 +51,7 @@ sealed class TrayApp : ApplicationContext
 
         _device.Log += Log.Info;
         _device.ConnectionChanged += connected => _ui.Post(_ => SetStatus(connected), null);
-        _deck = new DeckController(_device, _sensors, _batteries, _media);
+        _deck = new DeckController(_device, _sensors, _batteries, _media, _audio);
 
         LoadConfig();
         _device.Start();
@@ -122,6 +123,7 @@ sealed class TrayApp : ApplicationContext
         _sensors.Dispose();
         _batteries.Dispose();
         _media.Dispose();
+        _audio.Dispose();
         _tray.Dispose();
         base.ExitThreadCore();
     }

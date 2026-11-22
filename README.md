@@ -21,6 +21,12 @@ for the dock. Hardware sensors come from [LibreHardwareMonitor](https://github.c
 
   A device that's asleep or off keeps showing its last level with "last seen …", even after a restart.
 - **Now playing:** album art, title, artist and progress from whatever Windows shows in its media flyout (Spotify, browsers, players). On the small screen it lays out wide. Play/pause, next and previous keys follow the player's state and dim when the app doesn't support them.
+- **Audio:**
+  - The current output device with its volume. Pressing it opens a picker with one key per output, and choosing one makes it the default.
+  - Mute and microphone-mute keys that turn red while muted.
+  - Volume up and down keys.
+
+  All of them follow changes made elsewhere, such as the volume wheel or the tray.
 - **Graphs and a clock:** a graph of up to three sensors (on the small screen or a key) and a clock tile.
 - **Shortcuts:** launch apps (their own icon shows on the key), open URLs, send hotkeys and media keys, and switch pages.
 - **Tap or hold:** a key can do one thing on tap and another when held for half a second.
@@ -91,6 +97,7 @@ row 2:  10  11  12  [ small ]
 |---|---|
 | `tile` | `label` (default), `sensor`, `battery`, `batteries`, `media`, `clock`, `graph`; `cpu`, `ram` and `gpu` are shortcuts for sensor tiles |
 | `sensors` (tile) | up to three sensors on one key (name, value and bar per row, like `batteries`); list them in `sensors`, default CPU, GPU and RAM load |
+| `control` (audio) | `output` (default; pressing opens the output picker), `mute`, `mic`, `volup`, `voldown` (`step`, default 5) |
 | `control` | media tiles: `info` (now playing, default; pressing it toggles play/pause), `playpause`, `next` or `prev` |
 | `batteries` | three devices per tile. Every further `batteries` tile on the page shows the next three, and stays black when there's nothing left. Pressing one opens a page with one battery per key, unless the tile has its own `action` |
 | `sensor` | an alias from the list below, or a raw LibreHardwareMonitor id like `/gpu-nvidia/0/temperature/0` |
@@ -103,7 +110,7 @@ row 2:  10  11  12  [ small ]
 | `label` | text under the icon, or alone when there's no icon |
 | `icon` | `glyph:XXXX` (a [Segoe Fluent Icons](https://learn.microsoft.com/windows/apps/design/style/segoe-fluent-icons-font) code), or a `.png` / `.jpg` / `.ico` / `.exe` path |
 | `color` | accent colour `#RRGGBB` |
-| `action` / `hold` | `launch` (`path`, `args`), `url` (`url`), `hotkey` (`keys`), `media` (`command`: `playpause`, `play`, `pause`, `next`, `prev`), `page` (`page`), `back`, `config` |
+| `action` / `hold` | `launch` (`path`, `args`), `url` (`url`), `hotkey` (`keys`), `media` (`command`: `playpause`, `play`, `pause`, `next`, `prev`), `audio` (`command`: `mute`, `micmute`, `volup`, `voldown`, or `output` with `device`: part of a device name), `page` (`page`), `back`, `config` |
 | `native` | small screen only: `clock`, `clock-date`, `clock-weekday`, `clock-full`, `dial`, `stats` |
 
 **Sensor aliases**
