@@ -86,6 +86,22 @@ sealed class BatteryHub : IDisposable
 
     public IReadOnlyList<BatteryReading> All { get { lock (_gate) return _readings; } }
 
+    static readonly string[] SourceOrder = ["logitech", "corsair", "bluetooth", "xinput"];
+
+    /// <summary>Every known device (online or remembered) in a stable order: by source, then name.</summary>
+    public IReadOnlyList<BatteryReading> Devices() => All
+        .OrderBy(r => Array.IndexOf(SourceOrder, r.Source) is var i && i >= 0 ? i : SourceOrder.Length)
+        .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    /// <summary>A short display name: "G502 LIGHTSPEED Wireless Gaming Mouse" becomes "G502"; "AirPods Pro" stays.</summary>
+    public static string ShortName(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (name.Length <= 12 || words.Length < 2) return name;
+        return words[0].Length >= 3 ? words[0] : string.Join(' ', words.Take(2));
+    }
+
     /// <summary>
     /// First device from the given source ("any" for all) whose name contains match (case-insensitive).
     /// No match string means the first device of that source.

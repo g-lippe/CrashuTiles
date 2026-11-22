@@ -83,9 +83,30 @@ sealed class DeckController : IDisposable
 
     // ---------- pages ----------
 
+    /// <summary>Built-in page listing every battery, one per key; opened by pressing a "batteries" tile.</summary>
+    public const string BatteryPageName = "__batteries";
+
+    public static Dictionary<string, KeyConfig> BatteryPage(BatteryHub hub)
+    {
+        var keys = new Dictionary<string, KeyConfig>
+        {
+            ["0"] = new() { Label = "Back", Icon = "glyph:E72B", Color = "#F5A623", Action = new ActionConfig { Type = "back" } },
+            ["small"] = new() { Native = "clock-full" },
+        };
+        int k = 1;
+        foreach (var d in hub.Devices().Take(KeyCount - 1))
+            keys[(k++).ToString()] = new KeyConfig { Tile = "battery", Battery = d.Source, Match = d.Name, Label = BatteryHub.ShortName(d.Name) };
+        return keys;
+    }
+
+    Dictionary<string, KeyConfig>? PageKeys(string page) =>
+        page == BatteryPageName ? BatteryPage(_batteries)
+        : _config != null && _config.Pages.TryGetValue(page, out var keys) ? keys : null;
+
     void Load(string page)
     {
-        if (_config == null || !_config.Pages.TryGetValue(page, out var keys)) { Log.Info($"No page '{page}'"); return; }
+        var keys = PageKeys(page);
+        if (keys == null) { Log.Info($"No page '{page}'"); return; }
         _page = page;
         for (int i = 0; i < Slots; i++)
         {
@@ -99,6 +120,8 @@ sealed class DeckController : IDisposable
                 catch (Exception e) { Log.Info($"Key {id} on '{page}': {e.Message}"); }
             }
         }
+
+        Tile.AssignGroups(_tiles);
 
         // Small screen: our own image, or the firmware's clock/stats.
         var small = _keys[SmallScreenIndex];
@@ -121,7 +144,7 @@ sealed class DeckController : IDisposable
 
     void GoTo(string page)
     {
-        if (_config == null || !_config.Pages.ContainsKey(page)) { Log.Info($"No page '{page}'"); return; }
+        if (PageKeys(page) == null) { Log.Info($"No page '{page}'"); return; }
         _history.Push(_page);
         Load(page);
     }
@@ -169,12 +192,14 @@ sealed class DeckController : IDisposable
     {
         if (i < 0 || i >= Slots) return;
         var key = _keys[i];
+        // A "batteries" tile without its own action opens the battery page.
+        var tap = key?.Action ?? (_tiles[i] is MultiBatteryTile ? new ActionConfig { Type = "page", Page = BatteryPageName } : null);
         if (down)
         {
             _pressed[i] = true;
             _pressStart[i] = _clock.ElapsedMilliseconds;
             DrawSlot(i, DateTime.Now);
-            if (key?.Hold == null && key?.Action != null) Fire(key.Action); // no hold: act on press, it feels faster
+            if (key?.Hold == null && tap != null) Fire(tap); // no hold: act on press, it feels faster
         }
         else
         {
@@ -184,7 +209,7 @@ sealed class DeckController : IDisposable
             if (key?.Hold != null)
             {
                 bool held = _clock.ElapsedMilliseconds - _pressStart[i] >= HoldMs;
-                var action = held ? key.Hold : key.Action;
+                var action = held ? key.Hold : tap;
                 if (action != null) Fire(action);
             }
         }

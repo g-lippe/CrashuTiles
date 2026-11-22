@@ -87,7 +87,8 @@ row 2:  10  11  12  [ small ]
 
 | Field | Values |
 |---|---|
-| `tile` | `label` (default), `sensor`, `clock`, `graph`; `cpu`, `ram` and `gpu` are shortcuts for sensor tiles |
+| `tile` | `label` (default), `sensor`, `battery`, `batteries`, `clock`, `graph`; `cpu`, `ram` and `gpu` are shortcuts for sensor tiles |
+| `batteries` | three devices per tile. Every further `batteries` tile on the page shows the next three, and stays black when there's nothing left. Pressing one opens a page with one battery per key, unless the tile has its own `action` |
 | `sensor` | an alias from the list below, or a raw LibreHardwareMonitor id like `/gpu-nvidia/0/temperature/0` |
 | `style` | sensor tiles: `spark` (default) or `gauge` |
 | `max` | top of the scale. The default is 100 for % and °C, otherwise the recent peak |

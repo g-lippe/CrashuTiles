@@ -11,7 +11,9 @@ static class DefaultConfig
   //   row 1:   5   6   7   8   9
   //   row 2:  10  11  12  [ small ]
   //
-  // tile:    label (default) | sensor | battery | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  // tile:    label (default) | sensor | battery | batteries | clock | graph   (cpu, ram, gpu = sensor shortcuts)
+  //          batteries: three devices per tile; each further "batteries" tile on the page shows the next three.
+  //          Pressing one (unless it has its own action) opens a page with one battery per key.
   // sensor:  cpu.load cpu.coremax cpu.temp* cpu.power* cpu.clock*  ram.load ram.used ram.free
   //          gpu.load gpu.temp gpu.hotspot gpu.memtemp gpu.power gpu.clock gpu.fan gpu.vram gpu.vramused
   //          net.down net.up (busiest adapter; "net.down@Ethernet 2" picks one)
@@ -40,11 +42,9 @@ static class DefaultConfig
       "1":  { "tile": "sensor", "sensor": "gpu.load", "warn": 90 },
       "2":  { "tile": "sensor", "sensor": "gpu.temp", "style": "gauge", "warn": 75, "crit": 85 },
       "3":  { "tile": "sensor", "sensor": "ram.load", "warn": 85 },
-      "4":  { "tile": "battery", "battery": "logitech", "match": "G502", "label": "Mouse" },
+      "4":  { "tile": "batteries" },
 
-      "5":  { "tile": "battery", "battery": "corsair", "match": "HS80", "label": "Headset" },
-      "6":  { "tile": "battery", "battery": "bluetooth", "match": "AirPods", "label": "AirPods" },
-      "7":  { "tile": "battery", "battery": "xinput", "label": "Controller" },
+      "5":  { "tile": "batteries" },
 
       "10": { "label": "Explorer", "action": { "type": "launch", "path": "explorer.exe" } },
       "11": { "label": "Snip", "icon": "glyph:E722", "action": { "type": "hotkey", "keys": "win+shift+s" } },

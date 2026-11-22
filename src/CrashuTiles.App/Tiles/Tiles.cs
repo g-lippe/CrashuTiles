@@ -33,6 +33,7 @@ abstract class Tile
         "ram" => new SensorTile(cfg, cfg.Sensor ?? "ram.load"),
         "gpu" => new SensorTile(cfg, cfg.Sensor ?? "gpu.load"),
         "battery" => new BatteryTile(cfg),
+        "batteries" => new MultiBatteryTile(cfg),
         "clock" => new ClockTile(cfg),
         "graph" => new GraphTile(cfg),
         _ => new LabelTile(cfg),
@@ -55,6 +56,14 @@ abstract class Tile
             }
         }
         return Painter.Png(bmp);
+    }
+
+    /// <summary>Numbers the "batteries" tiles of a page in key order, so each shows the next three devices.</summary>
+    public static void AssignGroups(IEnumerable<Tile?> pageTiles)
+    {
+        int group = 0;
+        foreach (var t in pageTiles)
+            if (t is MultiBatteryTile m) m.Group = group++;
     }
 
     public static byte[] Blank(int width, int height)
@@ -243,7 +252,7 @@ sealed class BatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199, 89))
         Painter.Background(g, r, color);
 
         var dim = Color.FromArgb(online ? 200 : 120, 255, 255, 255);
-        string title = Config.Label ?? Config.Match ?? reading?.Name ?? "Battery";
+        string title = Config.Label ?? Config.Match ?? (reading != null ? BatteryHub.ShortName(reading.Name) : "Battery");
         Painter.Text(g, title, Painter.Ui, FontStyle.Regular, 24, new RectangleF(r.X + 14, r.Y + 10, r.Width - 28, 32), dim, StringAlignment.Near);
 
         string value = pct is int v ? v + "%" : "–";
@@ -258,13 +267,65 @@ sealed class BatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199, 89))
             Painter.Text(g, note, Painter.Ui, FontStyle.Regular, 18, new RectangleF(r.X, r.Bottom - 28, r.Width, 24), dim);
     }
 
-    static string Ago(DateTime t)
+    public static Color LevelColor(int? pct, KeyConfig cfg, Color normal)
+    {
+        float warn = cfg.Warn ?? 30, crit = cfg.Crit ?? 15;
+        return pct is int p ? (p <= crit ? SensorFormat.Crit : p <= warn ? SensorFormat.Warn : normal) : Painter.DefaultAccent;
+    }
+
+    public static string Ago(DateTime t)
     {
         var d = DateTime.Now - t;
         if (d.TotalMinutes < 1) return "just now";
         if (d.TotalHours < 1) return $"{(int)d.TotalMinutes} min ago";
         if (d.TotalDays < 1) return $"{(int)d.TotalHours} h ago";
         return $"{(int)d.TotalDays} d ago";
+    }
+}
+
+/// <summary>
+/// Three devices per tile: name, percentage and a level bar each. Every "batteries" tile on a page
+/// takes the next three devices (Group is set by page order), so a 4th device spills into the
+/// next one; a tile with nothing left to show stays black. Pressing it opens the battery page.
+/// </summary>
+sealed class MultiBatteryTile(KeyConfig cfg) : Tile(cfg, Color.FromArgb(52, 199, 89))
+{
+    public const int PerTile = 3;
+
+    /// <summary>0 = devices 1-3, 1 = devices 4-6, ...</summary>
+    public int Group { get; set; }
+
+    public override int RefreshMs => 1000;
+
+    public override void Draw(Graphics g, Rectangle r, TileContext ctx)
+    {
+        var devices = ctx.Batteries.Devices().Skip(Group * PerTile).Take(PerTile).ToList();
+        if (devices.Count == 0) { g.Clear(Color.Black); return; }
+
+        Painter.Background(g, r, Painter.Mix(Accent, Painter.Base, 0.5f));
+        float rowH = (r.Height - 8f) / PerTile;
+        for (int i = 0; i < devices.Count; i++)
+        {
+            var d = devices[i];
+            bool online = d.Online;
+            var level = BatteryTile.LevelColor(d.Percent, Config, Accent);
+            var text = online ? Color.White : Color.FromArgb(120, 255, 255, 255);
+            var row = new RectangleF(r.X + 12, r.Y + 6 + i * rowH, r.Width - 24, rowH);
+
+            string pct = d.Percent is int p ? p + "%" : "–";
+            if (d.Charging && online) pct = "+" + pct;
+            using var vf = new Font(Painter.Numbers, 30, FontStyle.Bold, GraphicsUnit.Pixel);
+            float vw = g.MeasureString(pct, vf).Width;
+            Painter.Text(g, pct, Painter.Numbers, FontStyle.Bold, 30, new RectangleF(row.X, row.Y, row.Width, rowH - 14), text, StringAlignment.Far);
+            Painter.Text(g, BatteryHub.ShortName(d.Name), Painter.Ui, FontStyle.Regular, 20,
+                new RectangleF(row.X, row.Y, row.Width - vw, rowH - 14), online ? Color.FromArgb(210, 255, 255, 255) : text, StringAlignment.Near, wrap: false);
+
+            // Level bar under the row.
+            var bar = new RectangleF(row.X, row.Bottom - 13, row.Width, 7);
+            using (var track = new SolidBrush(Color.FromArgb(40, 255, 255, 255))) g.FillRectangle(track, bar);
+            float w = bar.Width * Math.Clamp((d.Percent ?? 0) / 100f, 0, 1);
+            using (var fill = new SolidBrush(online ? level : Painter.Mix(level, Color.Black, 0.55f))) g.FillRectangle(fill, bar.X, bar.Y, w, bar.Height);
+        }
     }
 }
 

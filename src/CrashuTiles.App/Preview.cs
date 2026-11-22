@@ -21,7 +21,6 @@ static class Preview
         string? page = args.Skip(2).FirstOrDefault(a => !a.StartsWith("--"));
         var cfg = useDefault ? AppConfig.Parse(DefaultConfig.Json) : AppConfig.LoadOrCreate(AppPaths.Config);
         page ??= cfg.StartPage;
-        var keys = cfg.Pages[page];
 
         // Tiles request their sensors on first draw, so draw once to register them,
         // then sample for a few seconds so the graphs have something to show.
@@ -29,10 +28,12 @@ static class Preview
         using var batteries = new CrashuTiles.Data.Batteries.BatteryHub(autoPoll: false);
         sensors.Sample();
         batteries.Poll();
+        var keys = page == Deck.DeckController.BatteryPageName ? Deck.DeckController.BatteryPage(batteries) : cfg.Pages[page];
         var tiles = new Dictionary<int, Tile>();
         for (int i = 0; i <= KeyCount; i++)
             if (keys.TryGetValue(i == SmallScreenIndex ? "small" : i.ToString(), out var kc) && !(i == SmallScreenIndex && kc.Native != null))
                 tiles[i] = Tile.Create(kc);
+        Tile.AssignGroups(Enumerable.Range(0, KeyCount + 1).Select(i => tiles.GetValueOrDefault(i)));
         var warm = new TileContext(sensors, batteries, DateTime.Now, false);
         foreach (var (i, t) in tiles) t.Render(i == SmallScreenIndex ? SmallWidth : KeySize, KeySize, warm);
         for (int s = 0; s < 8; s++) { Thread.Sleep(500); sensors.Sample(); }

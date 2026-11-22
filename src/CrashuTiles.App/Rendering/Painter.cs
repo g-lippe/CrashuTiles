@@ -61,13 +61,14 @@ static class Painter
 
     /// <summary>Draws text at the largest size up to maxPx that fits the box (wrapping on spaces).</summary>
     public static void Text(Graphics g, string text, FontFamily family, FontStyle style, float maxPx, RectangleF box,
-        Color color, StringAlignment h = StringAlignment.Center, StringAlignment v = StringAlignment.Center)
+        Color color, StringAlignment h = StringAlignment.Center, StringAlignment v = StringAlignment.Center, bool wrap = true)
     {
         if (string.IsNullOrEmpty(text)) return;
-        using var fmt = new StringFormat { Alignment = h, LineAlignment = v, Trimming = StringTrimming.EllipsisWord };
+        using var fmt = new StringFormat { Alignment = h, LineAlignment = v, Trimming = StringTrimming.EllipsisCharacter };
+        if (!wrap) fmt.FormatFlags |= StringFormatFlags.NoWrap;
         float px = maxPx;
         Font font = new(family, px, style, GraphicsUnit.Pixel);
-        while (px > 10 && !Fits(g, text, font, box))
+        while (px > 10 && !(wrap ? Fits(g, text, font, box) : g.MeasureString(text, font).Width <= box.Width))
         {
             font.Dispose();
             px -= 2;

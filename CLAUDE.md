@@ -25,6 +25,8 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 
 ## Battery facts (2026-11-18)
 
+- `MultiBatteryTile` ("batteries") shows three devices from `BatteryHub.Devices()`, which is in stable order: by source, then name. `Tile.AssignGroups` numbers these tiles in key order, so a fourth device spills into the next one.
+- A "batteries" tile without its own action opens the built-in page `DeckController.BatteryPageName` (`__batteries`). The page is generated from the devices known at that moment: Back plus one `battery` tile each. `--preview out.png __batteries` renders it.
 - `Data/Batteries/BatteryHub` polls every source every 30 s on a timer thread. It caches the last level per device in `%APPDATA%\CrashuTiles\batteries.json`, so offline devices show their last level.
 - **Logitech G502 LIGHTSPEED** (receiver `046D:C539`, slot 1):
   - It has only feature 0x1001 (voltage); 4056 mV is about 89% on the Li-ion curve.
