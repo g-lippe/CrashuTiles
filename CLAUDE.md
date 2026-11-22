@@ -33,6 +33,14 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
   - Media tiles: `NowPlayingTile` (`control` info, wide on the small screen) and `MediaControlTile`. Default taps are filled in by `DeckController.OnButton`.
   - `Actions/*`, `Config/*` (`DefaultConfig.cs` is the first-run config).
   - `Preview.cs`: `--preview out.png [page] [--default]` renders a page to an image with no device.
+  - `Settings/SettingsServer.cs` + `Settings/wwwroot/*` (embedded as `wwwroot/<name>`): the settings page.
+    - `HttpListener` on `http://localhost:4325` (no admin needed for a localhost prefix). It refuses any other Host header (DNS rebinding).
+    - API: `GET/POST /api/config`, `GET /api/catalog` (sensor aliases, seen batteries, outputs), `POST /api/render` (PNG of one key).
+    - Every API call needs the `X-CrashuTiles-Token` header. The token lives in `settings-token.txt`, so it survives restarts. The tray opens `/#token=…`, and the page moves it to `sessionStorage`.
+    - Previews go through `DeckController.RenderAsync`, on the deck thread, because Painter's caches aren't thread-safe.
+    - `AppConfig.Save` writes camelCase JSON with the default config's comment block on top, backs up `config.json.bak`, and the tray reloads immediately via `Saved`.
+  - The page is plain JS (`app.js`). Its `TYPES`, `ACTIONS` and `GLYPHS` lists must stay in step with `Tile.Create` and `DeckController` when tile types or actions change.
+  - **To test it:** read `settings-url.txt` and open it in the browser pane. The app itself must run outside the Claude container (see below).
 - `tools/probe`: the original PowerShell + C# 5 probe and benchmarks, loaded via Add-Type with no build step.
 - `tools/SensorProbe`: `dotnet run --project tools/SensorProbe` dumps every sensor LHM can see. Use it to find raw ids and check what new hardware exposes.
 
@@ -105,5 +113,5 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 2. ~~Sensor tiles via LibreHardwareMonitor, non-admin set~~ (v0.2). Still open: CPU temperature, board fans and disk temperatures through an elevated helper.
 3. ~~Peripheral batteries: Logitech HID++, Corsair iCUE, Bluetooth, AirPods BLE, XInput~~ (v0.3)
 4. ~~Media now playing and state-aware media keys~~ (v0.4). ~~Audio output switching, mute, mic mute, volume~~ (v0.5).
-5. Settings web page served locally (plain HTML/JS), autostart with Windows.
-   - The tile picker must offer **every** tile type, including ones not in the default layout. The maintainer removed the media control keys (`media` + `control`: `playpause`/`next`/`prev`) from his layout but wants to be able to add them back from the page.
+5. ~~Settings web page, autostart with Windows~~ (v0.6). The page offers every tile type. The maintainer keeps the media control keys, mute, mic and volume keys out of his layout but can add them from it.
+6. Ideas: CPU temperature via an elevated helper plus PawnIO, an app-aware page (switch pages when a game is focused), Bluetooth battery for non-AirPods devices (untested).

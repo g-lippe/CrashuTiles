@@ -263,6 +263,40 @@ sealed class DeckController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Renders one key config with live data, for the settings page. Runs on the deck thread,
+    /// like all other drawing (the drawing helpers aren't thread-safe).
+    /// </summary>
+    public Task<byte[]> RenderAsync(KeyConfig cfg, bool small, int group)
+    {
+        var done = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() =>
+        {
+            try
+            {
+                int w = small ? SmallWidth : KeySize;
+                if (small && cfg.Native != null) { done.SetResult(NativePreview(cfg.Native)); return; }
+                var tile = Tile.Create(cfg);
+                if (tile is MultiBatteryTile m) m.Group = group;
+                done.SetResult(tile.Render(w, KeySize, new TileContext(_sensors, _batteries, _media, _audio, DateTime.Now, false)));
+            }
+            catch (Exception e) { done.SetException(e); }
+        });
+        return done.Task;
+    }
+
+    static byte[] NativePreview(string mode)
+    {
+        using var bmp = Rendering.Painter.Canvas(SmallWidth, SmallHeight, out var g);
+        using (g)
+        {
+            g.Clear(Color.Black);
+            Rendering.Painter.Text(g, $"Dock's own {mode} screen", Rendering.Painter.Ui, FontStyle.Regular, 30,
+                new RectangleF(0, 0, SmallWidth, SmallHeight), Color.Gray);
+        }
+        return Rendering.Painter.Png(bmp);
+    }
+
     void Audio(ActionConfig a)
     {
         int step = Math.Clamp(a.Step ?? 5, 1, 50);

@@ -30,6 +30,32 @@ public sealed class AppConfig
         return cfg;
     }
 
+    /// <summary>camelCase, indented, nulls left out: the shape the settings page and the file both use.</summary>
+    public static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // keep "°", accents, "&" readable
+    };
+
+    public string ToJson() => JsonSerializer.Serialize(this, WriteOptions);
+
+    /// <summary>
+    /// Writes the config (keeping the reference comments from the default config at the top)
+    /// after saving the previous file as config.json.bak.
+    /// </summary>
+    public void Save(string path)
+    {
+        if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true);
+        var header = DefaultConfig.Json.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.TrimStart().StartsWith("//"));
+        string json = ToJson();
+        // json starts with "{"; put the comment block right after it.
+        string text = "{\n" + string.Join("\n", header) + "\n" + json[1..].TrimStart('\r', '\n').Insert(0, "\n");
+        File.WriteAllText(path, text.Replace("\r\n", "\n"));
+    }
+
     /// <summary>Loads the user's config, writing the default one on first run.</summary>
     public static AppConfig LoadOrCreate(string path)
     {

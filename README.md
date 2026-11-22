@@ -73,9 +73,23 @@ CrashuTiles.exe --preview out.png main
 Add `--default` to render the built-in default config instead of yours, or `--config file.json` to render another file.
 Use `__batteries` as the page name to render the built-in battery page.
 
-## Configuring
+## Settings page
 
-The config lives at `%APPDATA%\CrashuTiles\config.json` and is created on first run.
+Right-click the tray icon and choose **Settings…**, or double-click the icon.
+A page opens at `http://localhost:4325` and shows:
+
+- The dock laid out as it really is, with **live previews** of every key.
+- An editor for every tile type (including ones not in your layout) and for tap and hold actions.
+- Pages you can add, rename and delete, plus brightness and the start page.
+
+Drag a key onto another to move or swap them. **Save** (or Ctrl+S) writes `config.json` and the dock updates at once.
+
+The page only answers on this computer. API calls need a key that the tray hands to the browser, so other
+websites can't change your dock. The full address, key included, is also in `%APPDATA%\CrashuTiles\settings-url.txt`.
+
+## Configuring by hand
+
+The settings page edits the same file you can edit yourself. The config lives at `%APPDATA%\CrashuTiles\config.json` and is created on first run.
 Comments are allowed. Keys are numbered by position:
 
 ```

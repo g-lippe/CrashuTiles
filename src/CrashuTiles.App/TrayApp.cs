@@ -19,6 +19,7 @@ sealed class TrayApp : ApplicationContext
     readonly MediaHub _media = new();
     readonly AudioHub _audio = new();
     readonly DeckController _deck;
+    readonly Settings.SettingsServer _settings;
     readonly FileSystemWatcher _watcher;
     readonly System.Windows.Forms.Timer _reloadDebounce = new() { Interval = 400 };
     readonly System.Windows.Forms.Timer _studioCheck = new() { Interval = 5000 };
@@ -39,8 +40,10 @@ sealed class TrayApp : ApplicationContext
         menu.Items.Add(_status);
         menu.Items.Add(_closeStudio);
         menu.Items.Add(new ToolStripSeparator());
+        var settings = new ToolStripMenuItem("Settings…", null, (_, _) => OpenSettings()) { Font = new Font(menu.Font, FontStyle.Bold) };
+        menu.Items.Add(settings);
         menu.Items.Add(brightness);
-        menu.Items.Add("Edit tiles (config.json)", null, (_, _) => ActionRunner.OpenConfig());
+        menu.Items.Add("Edit config.json", null, (_, _) => ActionRunner.OpenConfig());
         menu.Items.Add("Reload config", null, (_, _) => LoadConfig());
         menu.Items.Add("Open data folder", null, (_, _) => Process.Start("explorer.exe", $"\"{AppPaths.Folder}\""));
         var autostart = new ToolStripMenuItem("Start with Windows") { Checked = Autostart.IsEnabled, CheckOnClick = true };
@@ -50,17 +53,20 @@ sealed class TrayApp : ApplicationContext
         menu.Items.Add("Exit", null, (_, _) => { Log.Info("Exit chosen from the tray menu"); ExitThread(); });
 
         _tray = new NotifyIcon { Icon = TrayIcon.Create(), Text = "CrashuTiles", ContextMenuStrip = menu, Visible = true };
-        _tray.DoubleClick += (_, _) => ActionRunner.OpenConfig();
+        _tray.DoubleClick += (_, _) => OpenSettings();
 
         _device.Log += Log.Info;
         _device.ConnectionChanged += connected => _ui.Post(_ => SetStatus(connected), null);
         _deck = new DeckController(_device, _sensors, _batteries, _media, _audio);
+        _settings = new Settings.SettingsServer(_deck, _batteries, _audio);
+        _settings.Saved += () => _ui.Post(_ => LoadConfig(), null);
+        if (!_settings.Start()) settings.Enabled = false;
 
         LoadConfig();
         _device.Start();
 
         _watcher = new FileSystemWatcher(AppPaths.Folder, "config.json") { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
-        _watcher.Changed += (_, _) => _ui.Post(_ => { _reloadDebounce.Stop(); _reloadDebounce.Start(); }, null);
+        _watcher.Changed += (_, _) => { Log.Info("config.json changed on disk"); _ui.Post(_ => { _reloadDebounce.Stop(); _reloadDebounce.Start(); }, null); };
         _watcher.Created += (_, _) => _ui.Post(_ => { _reloadDebounce.Stop(); _reloadDebounce.Start(); }, null);
         _watcher.Renamed += (_, _) => _ui.Post(_ => { _reloadDebounce.Stop(); _reloadDebounce.Start(); }, null);
         _watcher.EnableRaisingEvents = true;
@@ -70,6 +76,12 @@ sealed class TrayApp : ApplicationContext
         _studioCheck.Start();
         CheckStudio();
         Log.Info("CrashuTiles started");
+    }
+
+    void OpenSettings()
+    {
+        try { Process.Start(new ProcessStartInfo(_settings.Url) { UseShellExecute = true }); }
+        catch (Exception e) { Log.Info("Opening the settings page failed: " + e.Message); }
     }
 
     void LoadConfig()
@@ -121,6 +133,7 @@ sealed class TrayApp : ApplicationContext
         _tray.Visible = false;
         _watcher.Dispose();
         _studioCheck.Dispose();
+        _settings.Dispose();
         _deck.Dispose();
         _device.Dispose();
         _sensors.Dispose();

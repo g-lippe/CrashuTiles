@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CrashuTiles settings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>CrashuTiles</div>
+    <div class="status" id="status" role="status"></div>
+    <button id="revert" type="button" disabled>Revert</button>
+    <button id="save" type="button" class="primary" disabled>Save</button>
+  </header>
+
+  <div id="locked" class="locked" hidden>
+    <h1>Open settings from the tray</h1>
+    <p>Right-click the CrashuTiles icon in the taskbar tray and choose <b>Settings</b>.
+      That link carries a one-time key that keeps other websites from changing your dock.</p>
+  </div>
+
+  <main id="app" hidden>
+    <section class="workspace">
+      <nav class="pages" id="pages" aria-label="Pages"></nav>
+      <div class="deck-wrap">
+        <div class="deck" id="deck"></div>
+      </div>
+      <p class="hint">Click a key to edit it. Drag a key onto another to move or swap them. Previews use live data.</p>
+
+      <section class="card general">
+        <h2>General</h2>
+        <div class="row">
+          <label for="brightness">Brightness</label>
+          <input type="range" id="brightness" min="0" max="100" step="5">
+          <output id="brightnessValue"></output>
+        </div>
+        <div class="row">
+          <label for="startPage">Start page</label>
+          <select id="startPage"></select>
+        </div>
+      </section>
+    </section>
+
+    <aside class="card editor" id="editor" aria-live="polite"></aside>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
