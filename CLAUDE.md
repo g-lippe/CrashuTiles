@@ -89,6 +89,14 @@ C# / .NET 10, WinForms tray app. The only NuGet dependency is LibreHardwareMonit
 - On-device behaviour (flicker, black tiles, timing) can only be judged by a person looking at
   the dock. Ask the maintainer before anything that animates or floods it, and gate tests on a key press.
 - The running exe locks `bin/`. Stop `CrashuTiles` before rebuilding.
+- **Installed copy:** `tools/install.ps1` publishes a Release build to `%LOCALAPPDATA%\Programs\CrashuTiles`, makes a Start Menu shortcut and launches it through `explorer.exe`. That copy is what the maintainer runs day to day. "Start with Windows" in the tray writes `HKCU\...\Run`.
+- **Claude Code desktop gotcha (2026-11-22):** Claude's shell runs inside the Claude **MSIX package container**.
+  - Anything started from it (`Start-Process CrashuTiles.exe`) belongs to the container and is **killed when it recycles**. It looks like a silent exit, with no log line and no WER report.
+  - `%APPDATA%` folders first created from inside the container are **redirected** to `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\…`.
+  - Always launch the app with `Start-Process explorer.exe "<exe path>"` (or `tools/install.ps1`), which runs it outside the container.
+  - The data was moved to the real `%APPDATA%\CrashuTiles`. The old private copy is `…\LocalCache\Roaming\CrashuTiles.migrated`.
+  - Reading `%APPDATA%\CrashuTiles` from the shell now shows the real folder. Writing new files there from the shell may still be redirected.
+- Exits are logged ("Stopped normally", "Process exiting", "Windows session ending", "Fatal: …"). A run that ends with none of these was killed from outside.
 - Collaboration: Claude builds, the maintainer reviews. Don't commit or push unless asked.
 
 ## Roadmap

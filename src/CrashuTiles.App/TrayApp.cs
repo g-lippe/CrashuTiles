@@ -43,8 +43,11 @@ sealed class TrayApp : ApplicationContext
         menu.Items.Add("Edit tiles (config.json)", null, (_, _) => ActionRunner.OpenConfig());
         menu.Items.Add("Reload config", null, (_, _) => LoadConfig());
         menu.Items.Add("Open data folder", null, (_, _) => Process.Start("explorer.exe", $"\"{AppPaths.Folder}\""));
+        var autostart = new ToolStripMenuItem("Start with Windows") { Checked = Autostart.IsEnabled, CheckOnClick = true };
+        autostart.CheckedChanged += (_, _) => Autostart.Set(autostart.Checked);
+        menu.Items.Add(autostart);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitThread());
+        menu.Items.Add("Exit", null, (_, _) => { Log.Info("Exit chosen from the tray menu"); ExitThread(); });
 
         _tray = new NotifyIcon { Icon = TrayIcon.Create(), Text = "CrashuTiles", ContextMenuStrip = menu, Visible = true };
         _tray.DoubleClick += (_, _) => ActionRunner.OpenConfig();
@@ -126,6 +129,29 @@ sealed class TrayApp : ApplicationContext
         _audio.Dispose();
         _tray.Dispose();
         base.ExitThreadCore();
+    }
+}
+
+/// <summary>"Start with Windows": a value under HKCU\...\Run pointing at this exe (per user, no admin).</summary>
+static class Autostart
+{
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run", Name = "CrashuTiles";
+
+    public static bool IsEnabled
+    {
+        get
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
+            return key?.GetValue(Name) is string;
+        }
+    }
+
+    public static void Set(bool enabled)
+    {
+        using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey);
+        if (enabled) key.SetValue(Name, $"\"{Environment.ProcessPath}\"");
+        else key.DeleteValue(Name, throwOnMissingValue: false);
+        Log.Info(enabled ? $"Start with Windows on: {Environment.ProcessPath}" : "Start with Windows off");
     }
 }
 

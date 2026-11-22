@@ -41,7 +41,17 @@ for the dock. Hardware sensors come from [LibreHardwareMonitor](https://github.c
 - **Ulanzi Studio must be closed.** It talks to the dock too, so every press would fire twice.
   CrashuTiles warns you and offers to close it from its tray menu.
 
-## Build and run
+## Install
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools\install.ps1
+```
+
+This builds a Release copy into `%LOCALAPPDATA%\Programs\CrashuTiles`, adds a **CrashuTiles** Start Menu shortcut and starts it.
+Re-run it to update. Your config in `%APPDATA%\CrashuTiles` is kept.
+To start it automatically, tick **Start with Windows** in the tray menu.
+
+## Build and run (development)
 
 ```bash
 dotnet build
